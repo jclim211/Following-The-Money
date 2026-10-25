@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "Athena", "Effect": "Allow",
+     "Action": ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults", "athena:StopQueryExecution", "athena:GetWorkGroup"],
+     "Resource": "arn:aws:athena:us-east-1:761018854594:workgroup/primary"},
+    {"Sid": "GlueCatalogRead", "Effect": "Allow",
+     "Action": ["glue:GetDatabase", "glue:GetTable", "glue:GetTables", "glue:GetPartition", "glue:GetPartitions", "glue:BatchGetPartition"],
+     "Resource": ["arn:aws:glue:us-east-1:761018854594:catalog",
+                  "arn:aws:glue:us-east-1:761018854594:database/aml_curated",
+                  "arn:aws:glue:us-east-1:761018854594:table/aml_curated/*",
+                  "arn:aws:glue:us-east-1:761018854594:database/aml_clean",
+                  "arn:aws:glue:us-east-1:761018854594:table/aml_clean/*",
+                  "arn:aws:glue:us-east-1:761018854594:database/aml_metrics",
+                  "arn:aws:glue:us-east-1:761018854594:table/aml_metrics/*"]},
+    {"Sid": "BucketList", "Effect": "Allow",
+     "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+     "Resource": "arn:aws:s3:::is459-g7-projectbucket"},
+    {"Sid": "ReadData", "Effect": "Allow",
+     "Action": ["s3:GetObject"],
+     "Resource": ["arn:aws:s3:::is459-g7-projectbucket/curated/*",
+                  "arn:aws:s3:::is459-g7-projectbucket/clean/*",
+                  "arn:aws:s3:::is459-g7-projectbucket/metrics/*",
+                  "arn:aws:s3:::is459-g7-projectbucket/scripts/dashboard/*",
+                  "arn:aws:s3:::is459-g7-projectbucket/athena-results/streamlit/*"]},
+    {"Sid": "WriteQueryResults", "Effect": "Allow",
+     "Action": ["s3:PutObject", "s3:AbortMultipartUpload"],
+     "Resource": "arn:aws:s3:::is459-g7-projectbucket/athena-results/streamlit/*"}
+  ]
+}

@@ -1,0 +1,12 @@
+[Unit]
+Description=Following the Money Streamlit dashboard
+After=network-online.target
+
+[Service]
+Environment=BQ1_AWS_PROFILE=
+Environment=BQ1_REGION=us-east-1
+ExecStart=/opt/bq1/run.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

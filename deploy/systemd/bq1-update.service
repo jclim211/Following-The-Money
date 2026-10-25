@@ -1,0 +1,6 @@
+[Unit]
+Description=Pull dashboard code from GitHub
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bq1/update.sh
