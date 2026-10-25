@@ -1,0 +1,14 @@
+{
+  "description": "IS459 Group 7 BQ1 weight table. Weights must add up to 100. Edit, upload to S3, and rerun Glue Job 2 to test new weights.",
+  "weights": {
+    "fan_out": 20,
+    "pass_through": 20,
+    "fan_in": 15,
+    "cross_currency_share": 15,
+    "cross_bank_share": 10,
+    "activity_spike": 10,
+    "payment_format_risk": 10
+  },
+  "high_risk_payment_formats": ["ACH"],
+  "high_risk_payment_formats_note": "TO VERIFY: run athena/03_payment_format_check.sql and list the formats with a clearly higher laundering rate."
+}
