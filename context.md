@@ -44,15 +44,33 @@ Only touch resources named `is459-g7-*` or the bucket `is459-g7-projectbucket`.
 - BQ1 (`aml_curated`): `risk_rankings` (one row per account per day, score, rank, points per behaviour), `account_labels` (IsLaundering per account-day, evaluation only), `account_profiles` (raw behaviours), `capacity_evaluation`, `capacity_summary`.
 - BQ2 (`aml_clean`): `schemes` (one row per scheme transfer), `banks`. When BQ2 writes curated tables, put them in `curated/bq2/` and register them in `aml_curated` (prefix `bq2_`). The server can already read `aml_curated`, `aml_clean` and `aml_metrics`.
 
+## Do I need AWS access?
+
+| You want to | AWS access needed? |
+|---|---|
+| Edit a page and push to GitHub | **No.** The server reads Athena with its own IAM role. To preview on the live site, someone has to start the server (see "How deploys work"). |
+| Run the dashboard on your own laptop | **Yes.** The app reads Athena from your laptop, so it needs AWS credentials (one-time setup below). |
+| Run or change EMR jobs, query Athena in the console | Yes, console sign-in. |
+
 ## Run the dashboard locally (Windows)
 
-1. Install the AWS CLI and sign in: `aws login --profile is459` (ask Jie Ching for console access).
-2. First time only (from the `dashboard` folder):
+Set this up yourself, once per laptop:
+
+1. Install AWS CLI v2 (version 2.32 or newer has `aws login`): https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html. Check with `aws --version`.
+2. Sign in with the group's console login (ask Jie Ching for it; it is never stored in this repo):
+   ```
+   aws login --profile is459 --region us-east-1
+   ```
+   A browser opens, sign in with the group IAM user, and the CLI saves short-lived credentials under profile `is459`. They last 12 hours; just run the same command again when they expire.
+   Check it worked: `aws sts get-caller-identity --profile is459` should show account 761018854594.
+3. First time only (from the `dashboard` folder):
    ```
    py -3.12 -m venv %USERPROFILE%\.venvs\is459-bq1
    %USERPROFILE%\.venvs\is459-bq1\Scripts\pip install -r requirements.txt
    ```
-3. Run: double click `dashboard\run_dashboard.bat`, or `streamlit run Home.py` from `dashboard/`. Opens http://localhost:8501.
+   (`requirements.txt` includes `botocore[crt]`, which Python needs to use `aws login` credentials.)
+4. Run: double click `dashboard\run_dashboard.bat`, or `streamlit run Home.py` from `dashboard/`. Opens http://localhost:8501.
+   If you see "expired" or "Unable to locate credentials", run step 2 again.
 
 Mac: same steps with `python3 -m venv ~/.venvs/is459-bq1` and `~/.venvs/is459-bq1/bin/streamlit run Home.py`.
 
@@ -69,7 +87,7 @@ Mac: same steps with `python3 -m venv ~/.venvs/is459-bq1` and `~/.venvs/is459-bq
 
 ## How deploys work
 
-- Live link: http://54.83.81.34:8501 (changes if the server is stopped and started; check the EC2 console for the new Public IPv4).
+- The server is normally **stopped** to save budget. To use it: EC2 console > Instances > `is459-g7-dashboard` > Instance state > Start, wait about a minute, then open `http://<Public IPv4>:8501`. The Public IPv4 **changes on every start**, so copy it from the console each time. Stop it again when done.
 - Push to `main` on GitHub. The server checks GitHub every 2 minutes (`deploy/update.sh`, run by a systemd timer). If there is a new commit it pulls, installs `dashboard/requirements.txt` and restarts Streamlit.
 - A broken push breaks the live site, so test locally first. To roll back, revert the commit and push.
 - Logs: EC2 console > `is459-g7-dashboard` > Connect > Session Manager, then `sudo journalctl -u bq1-dashboard -n 50` or `sudo journalctl -t bq1-update`.
