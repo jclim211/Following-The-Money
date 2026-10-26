@@ -57,7 +57,7 @@ Only touch resources named `is459-g7-*` or the bucket `is459-g7-projectbucket`.
 Set this up yourself, once per laptop:
 
 1. Install AWS CLI v2 (version 2.32 or newer has `aws login`): https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html. Check with `aws --version`.
-2. Sign in with the group's console login (ask Jie Ching for it; it is never stored in this repo):
+2. Sign in with the group's console login:
    ```
    aws login --profile is459 --region us-east-1
    ```
@@ -91,7 +91,7 @@ Mac: same steps with `python3 -m venv ~/.venvs/is459-bq1` and `~/.venvs/is459-bq
 - Push to `main` on GitHub. The server checks GitHub every 2 minutes (`deploy/update.sh`, run by a systemd timer). If there is a new commit it pulls, installs `dashboard/requirements.txt` and restarts Streamlit.
 - A broken push breaks the live site, so test locally first. To roll back, revert the commit and push.
 - Logs: EC2 console > `is459-g7-dashboard` > Connect > Session Manager, then `sudo journalctl -u bq1-dashboard -n 50` or `sudo journalctl -t bq1-update`.
-- If you change files in `deploy/`, they are NOT applied automatically. Ask Jie Ching to copy them onto the server.
+- If you change files in `deploy/`, they are NOT applied automatically.
 
 ## Cost (project budget USD 250)
 
