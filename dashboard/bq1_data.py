@@ -18,6 +18,14 @@ import pandas as pd
 QUEUE_FILE = "bq1_investigator_queue.csv"
 CAPACITY_FILE = "bq1_capacity_summary.csv"
 
+# Optional dashboard-enrichment columns. The app remains compatible with the
+# original 100-row operational export, but enables the richer controls when
+# these fields are present in the top-1,000 evaluation export.
+ACTIVE_COLUMN = "daily_active_accounts"
+LABEL_COLUMN = "account_day_is_laundering"
+COUNTRY_COLUMN = "account_country"
+OPTIONAL_QUEUE_COLUMNS = [ACTIVE_COLUMN, LABEL_COLUMN, COUNTRY_COLUMN]
+
 ID_COLUMNS = ["bank_id", "account_id", "account_key"]
 INT_COLUMNS = ["daily_rank", "txn_count", "fan_in", "fan_out"]
 SHARE_COLUMNS = ["ach_share", "cross_border_share", "amount_band_share", "pass_through_share_24h"]
@@ -53,13 +61,10 @@ CAPACITY_COLUMNS = [
     "overall_precision", "overall_detection_rate",
 ]
 
-OPTIONAL_CAPACITY_COLUMNS = [
-    "total_accounts_reviewed", "total_laundering_detected", "total_laundering_account_days",
-    "min_daily_cutoff_score", "max_daily_cutoff_score",
-]
-
-# Columns that must never appear in the operational queue (target leakage).
-LABEL_COLUMNS = {"is_laundering", "account_day_is_laundering", "label", "y"}
+# Alternative label names that should not silently enter the dashboard.
+# LABEL_COLUMN is deliberately supported, but it is hidden unless the user
+# explicitly switches on evaluation mode.
+UNEXPECTED_LABEL_COLUMNS = {"is_laundering", "label", "y"}
 
 # ---------------------------------------------------------------------------
 # Verified figures from the handoff (sections 9-10). Used only for validation.
@@ -114,14 +119,18 @@ def _to_numeric(df: pd.DataFrame, cols: list[str], name: str) -> None:
 
 
 def load_queue(path: str | Path) -> pd.DataFrame:
-    """Load the 1,600-row investigator queue export."""
-    df = pd.read_csv(path, dtype={c: "string" for c in ID_COLUMNS})
+    """Load a ranked investigator export (100-1,000 rows per date)."""
+    string_cols = ID_COLUMNS + [COUNTRY_COLUMN]
+    df = pd.read_csv(path, dtype={c: "string" for c in string_cols})
     _check_columns(df, QUEUE_COLUMNS, "Queue CSV")
     for col in ID_COLUMNS:
         df[col] = df[col].str.strip()
+    if COUNTRY_COLUMN in df.columns:
+        df[COUNTRY_COLUMN] = df[COUNTRY_COLUMN].fillna("Unknown").str.strip().replace("", "Unknown")
     df["profile_date"] = pd.to_datetime(df["profile_date"], errors="raise").dt.normalize()
-    _to_numeric(df, INT_COLUMNS + MEASURE_COLUMNS, "Queue CSV")
-    for col in INT_COLUMNS:
+    optional_numeric = [c for c in [ACTIVE_COLUMN, LABEL_COLUMN] if c in df.columns]
+    _to_numeric(df, INT_COLUMNS + MEASURE_COLUMNS + optional_numeric, "Queue CSV")
+    for col in INT_COLUMNS + optional_numeric:
         if (df[col].dropna() % 1 != 0).any():
             raise SchemaError(f"Queue CSV: column '{col}' should hold whole numbers")
         df[col] = df[col].astype("Int64")
@@ -132,8 +141,7 @@ def load_capacity(path: str | Path) -> pd.DataFrame:
     """Load the 5-row capacity summary export."""
     df = pd.read_csv(path)
     _check_columns(df, CAPACITY_COLUMNS, "Capacity CSV")
-    # The real export also carries totals and min/max daily cut-offs; use them when present.
-    _to_numeric(df, CAPACITY_COLUMNS + [c for c in OPTIONAL_CAPACITY_COLUMNS if c in df.columns], "Capacity CSV")
+    _to_numeric(df, CAPACITY_COLUMNS, "Capacity CSV")
     df["daily_capacity"] = df["daily_capacity"].astype("Int64")
     df["days_evaluated"] = df["days_evaluated"].astype("Int64")
     return df.sort_values("daily_capacity").reset_index(drop=True)
@@ -158,18 +166,20 @@ def run_checks(queue: pd.DataFrame, capacity: pd.DataFrame) -> list[Check]:
     n_dates = queue["profile_date"].nunique()
     per_date = queue.groupby("profile_date").size()
 
-    add("Queue has 1,600 rows", len(queue) == EXPECTED_DATES * EXPECTED_ROWS_PER_DATE,
-        f"{len(queue):,} rows")
+    min_rows = int(per_date.min())
+    max_rows = int(per_date.max())
+    add("Queue contains at least the daily top 100", min_rows >= EXPECTED_ROWS_PER_DATE,
+        f"{len(queue):,} rows; {min_rows:,}-{max_rows:,} per date")
     add("Capacity summary has 5 rows", len(capacity) == 5, f"{len(capacity)} rows")
     add("Queue covers 16 dates", n_dates == EXPECTED_DATES, f"{n_dates} dates")
-    add("Every date has exactly 100 rows", bool((per_date == EXPECTED_ROWS_PER_DATE).all()),
-        f"min {per_date.min()}, max {per_date.max()} rows per date")
+    add("Every date has the same number of ranked rows", min_rows == max_rows,
+        f"min {min_rows:,}, max {max_rows:,} rows per date")
 
     ranks_ok = queue.groupby("profile_date")["daily_rank"].apply(
-        lambda r: sorted(r.dropna().astype(int).tolist()) == list(range(1, EXPECTED_ROWS_PER_DATE + 1))
+        lambda r: sorted(r.dropna().astype(int).tolist()) == list(range(1, len(r) + 1))
     )
     bad_dates = [d.date().isoformat() for d, ok in ranks_ok.items() if not ok]
-    add("Every date has unique ranks 1-100", ranks_ok.all(),
+    add("Every date has unique consecutive ranks", ranks_ok.all(),
         "all dates OK" if not bad_dates else f"problem dates: {bad_dates[:5]}")
 
     latest = queue["profile_date"].max()
@@ -196,9 +206,20 @@ def run_checks(queue: pd.DataFrame, capacity: pd.DataFrame) -> list[Check]:
     add("Capacity figures match the verified results", not mismatches,
         "all 5 capacities match" if not mismatches else "; ".join(mismatches[:3]))
 
-    leaked = sorted(LABEL_COLUMNS.intersection(queue.columns))
-    add("No ground-truth label in the queue", not leaked,
-        "no label column" if not leaked else f"found {leaked}")
+    unexpected_labels = sorted(UNEXPECTED_LABEL_COLUMNS.intersection(queue.columns))
+    add("No unexpected label columns", not unexpected_labels,
+        "only the controlled evaluation label may be present" if not unexpected_labels
+        else f"found {unexpected_labels}")
+
+    if LABEL_COLUMN in queue.columns:
+        valid_labels = queue[LABEL_COLUMN].dropna().isin([0, 1]).all()
+        add("Evaluation label contains only 0 or 1", valid_labels,
+            "valid evaluation-only ground truth" if valid_labels else "invalid label value found")
+
+    if ACTIVE_COLUMN in queue.columns:
+        active_consistent = queue.groupby("profile_date")[ACTIVE_COLUMN].nunique(dropna=False).le(1).all()
+        add("Active-account count is consistent within each date", active_consistent,
+            "one daily total per date" if active_consistent else "multiple daily totals found")
 
     bad_ids = queue[ID_COLUMNS].apply(lambda s: s.str.fullmatch(r".*\.0").fillna(False)).any(axis=None)
     add("Identifiers kept as text (no '.0' suffix)", not bad_ids,
@@ -210,13 +231,28 @@ def run_checks(queue: pd.DataFrame, capacity: pd.DataFrame) -> list[Check]:
 # Derived figures for the UI (display helpers only; source data untouched)
 # ---------------------------------------------------------------------------
 def day_kpis(selected: pd.DataFrame) -> dict:
-    return {
+    result = {
         "queue_size": len(selected),
         "highest": selected["risk_score"].max(),
         "average": selected["risk_score"].mean(),
         "cutoff": selected["risk_score"].min(),
         "value": selected["total_amount_usd"].sum(),
     }
+    if LABEL_COLUMN in selected.columns:
+        result["laundering_hits"] = int(selected[LABEL_COLUMN].fillna(0).sum())
+    return result
+
+
+def available_capacity(queue: pd.DataFrame) -> int:
+    """Largest rank available on every date."""
+    return int(queue.groupby("profile_date")["daily_rank"].max().min())
+
+
+def active_accounts_for_day(day_rows: pd.DataFrame) -> int | None:
+    """Return the upstream daily population count, if it was exported."""
+    if ACTIVE_COLUMN not in day_rows.columns or day_rows[ACTIVE_COLUMN].dropna().empty:
+        return None
+    return int(day_rows[ACTIVE_COLUMN].dropna().iloc[0])
 
 
 def component_table(row: pd.Series) -> pd.DataFrame:
@@ -297,10 +333,7 @@ def random_review_reference(capacity: pd.DataFrame) -> dict:
     active account-days per day     = all scored profiles / days evaluated
     """
     row = capacity.loc[capacity["daily_capacity"] == RECOMMENDED_CAPACITY].iloc[0]
-    if "total_laundering_account_days" in capacity.columns:  # present in the real export
-        laundering_per_day = row["total_laundering_account_days"] / int(row["days_evaluated"])
-    else:
-        laundering_per_day = row["avg_laundering_detected_per_day"] / row["overall_detection_rate"]
+    laundering_per_day = row["avg_laundering_detected_per_day"] / row["overall_detection_rate"]
     active_per_day = TOTAL_PROFILE_ROWS / int(row["days_evaluated"])
     base_rate = laundering_per_day / active_per_day
     return {
