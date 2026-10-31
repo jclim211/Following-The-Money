@@ -1,8 +1,8 @@
 """IS459 Group 7 | Following the Money: dashboard home page."""
 import streamlit as st
 
-st.set_page_config(page_title="Following the Money", layout="wide")
-st.title("Following the Money: IS459 Group 7")
+st.set_page_config(page_title="Following the Money", page_icon="🏦", layout="wide")
+st.title("🏦 Following the Money: IS459 Group 7")
 st.caption("IBM AML transactions (HI-Medium). Data is read live from Athena.")
 
 c1, c2 = st.columns(2)

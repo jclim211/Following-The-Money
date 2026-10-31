@@ -42,7 +42,7 @@ _BANK_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="48" height="4
 </svg>"""
 BANK_ICON_DATA_URL = "data:image/svg+xml;utf8," + quote(_BANK_ICON_SVG)
 
-st.set_page_config(page_title="BQ1 AML Investigator Queue", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="BQ1 AML Investigator Queue", page_icon="🏦", layout="wide")
 
 st.markdown(
     """
@@ -143,7 +143,7 @@ max_available = bd.available_capacity(queue)
 # ---------------------------------------------------------------------------
 # Header + sidebar filters
 # ---------------------------------------------------------------------------
-st.title("BQ1 · Daily AML Investigator Queue")
+st.title("🏦 BQ1 · Daily AML Investigator Queue")
 st.markdown(
     '<div class="subtitle">Which accounts should a fixed-capacity investigation team review first? '
     "Accounts are ranked each day by an explainable 100-point behavioural risk score. "

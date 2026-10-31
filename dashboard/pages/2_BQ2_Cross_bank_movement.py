@@ -140,8 +140,8 @@ def bank_label(df: pd.DataFrame) -> pd.Series:
 
 
 # ---------------------------------------------------------------- layout
-st.set_page_config(page_title="BQ2 Cross-bank Movement", layout="wide")
-st.title("BQ2: How do laundering networks move funds across banks?")
+st.set_page_config(page_title="BQ2 Cross-bank Movement", page_icon="🏦", layout="wide")
+st.title("🏦 BQ2: How do laundering networks move funds across banks?")
 flow = run_query("SELECT * FROM flow_comparison")
 profile = run_query("SELECT * FROM scheme_profile")
 st.caption(f"Live from Athena (aml_bq2_curated). Clean HI-Medium transactions 2022-09-01 to 09-16, "

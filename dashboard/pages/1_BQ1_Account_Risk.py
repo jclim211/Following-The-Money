@@ -36,8 +36,8 @@ def day_filter(col: str, days: list) -> str:
 
 
 # ---------------------------------------------------------------- layout
-st.set_page_config(page_title="BQ1 Investigator Queue", layout="wide")
-st.title("BQ1: Which accounts should investigators review first?")
+st.set_page_config(page_title="BQ1 Investigator Queue", page_icon="🏦", layout="wide")
+st.title("🏦 BQ1: Which accounts should investigators review first?")
 st.caption("Live from Athena (aml_curated). Risk score 0 to 100 = sum of weight x behaviour score.")
 
 all_days = run_query("SELECT DISTINCT profile_date FROM risk_rankings ORDER BY 1")["profile_date"].astype(str).tolist()
