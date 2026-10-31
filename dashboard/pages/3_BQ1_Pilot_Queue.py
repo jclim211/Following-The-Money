@@ -135,6 +135,9 @@ except bd.SchemaError as err:
     st.error(f"The exported CSV does not match the expected Athena schema.\n\n{err}")
     st.stop()
 
+# Optional bank_id -> name lookup (data_bq1/bq1_bank_names.csv); names show as 'unknown' without it.
+BANK_NAMES = bd.load_bank_names(DATA_DIR / bd.BANK_NAMES_FILE)
+
 failed = [c for c in checks if not c.passed]
 dates = sorted(queue["profile_date"].unique(), reverse=True)
 latest = dates[0]
@@ -192,6 +195,7 @@ with st.sidebar:
     banks = st.multiselect(
         "Bank ID", sorted(country_rows["bank_id"].dropna().unique(), key=lambda b: (len(b), b)),
         placeholder="All banks",
+        format_func=lambda b: f"{BANK_NAMES.get(b, 'unknown')} ({b})",
     )
     rank_range = st.slider("Rank range", 1, daily_capacity, (1, daily_capacity))
 
@@ -407,6 +411,7 @@ def render_queue_tab() -> None:
         table_columns.append(bd.LABEL_COLUMN)
     table = selected[table_columns].copy()
     table.insert(1, "bank_icon", BANK_ICON_DATA_URL)
+    table.insert(2, "bank_name", table["bank_id"].map(BANK_NAMES).fillna("unknown"))
     for col in ["ach_share", "pass_through_share_24h"]:
         table[col] = table[col] * 100
     table["cross_border_share"] = table["cross_border_share"].map(bd._pct)
@@ -425,6 +430,7 @@ def render_queue_tab() -> None:
                 "Bank", width="small", help="Neutral icon for a synthetic bank ID"
             ),
             bd.COUNTRY_COLUMN: st.column_config.TextColumn("Country"),
+            "bank_name": st.column_config.TextColumn("Bank"),
             "bank_id": st.column_config.TextColumn("Bank ID"),
             "account_id": st.column_config.TextColumn("Account"),
             "account_key": st.column_config.TextColumn("Account key"),

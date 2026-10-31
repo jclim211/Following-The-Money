@@ -137,6 +137,18 @@ def load_queue(path: str | Path) -> pd.DataFrame:
     return df.sort_values(["profile_date", "daily_rank"]).reset_index(drop=True)
 
 
+BANK_NAMES_FILE = "bq1_bank_names.csv"
+
+
+def load_bank_names(path: str | Path) -> dict:
+    """bank_id -> bank_name for the banks in the queue (optional file, empty if missing)."""
+    path = Path(path)
+    if not path.exists():
+        return {}
+    df = pd.read_csv(path, dtype="string")
+    return dict(zip(df["bank_id"], df["bank_name"]))
+
+
 def load_capacity(path: str | Path) -> pd.DataFrame:
     """Load the 5-row capacity summary export."""
     df = pd.read_csv(path)
