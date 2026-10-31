@@ -11,7 +11,6 @@ import pandas as pd
 import streamlit as st
 
 from common.athena import run_query
-from common.bank_icon import BANK_ICON_DATA_URL, bank_label
 
 # points column -> (label, max points from the revised weight table)
 BEHAVIOURS = {
@@ -59,18 +58,15 @@ tab_queue, tab_curve, tab_dist, tab_drill = st.tabs(
 # ---------------------------------------------------------------- 1. queue
 with tab_queue:
     queue = run_query(f"""
-        SELECT r.daily_rank, r.account_key, r.bank_id, b.bank_name, r.account_id, r.risk_score, r.txn_count,
+        SELECT r.daily_rank, r.account_key, r.bank_id, r.account_id, r.risk_score, r.txn_count,
                r.total_amount_usd, r.daily_active_accounts, {', '.join('r.' + c for c in POINT_COLS)},
                COALESCE(l.account_day_is_laundering, 0) AS is_laundering
         FROM risk_rankings r
         LEFT JOIN account_labels l
           ON l.account_key = r.account_key AND l.profile_date = r.profile_date
-        LEFT JOIN aml_clean.banks b ON b.bank_id = r.bank_id
         WHERE r.profile_date = '{day}' AND r.daily_rank <= {capacity}
         ORDER BY r.daily_rank""")
     queue["why_flagged"] = queue.apply(why_flagged, axis=1)
-    queue["bank_icon"] = BANK_ICON_DATA_URL
-    queue["bank"] = [bank_label(n, b) for n, b in zip(queue["bank_name"], queue["bank_id"])]
 
     caught = int(queue["is_laundering"].sum())
     total_day = int(run_query(f"SELECT SUM(account_day_is_laundering) AS t FROM account_labels "
@@ -86,16 +82,13 @@ with tab_queue:
                   help=f"{total_day:,} laundering accounts active that day, so detection rate is "
                        f"{100 * caught / max(total_day, 1):.2f}%")
 
-    cols = ["daily_rank", "bank_icon", "bank", "account_key", "risk_score", "why_flagged", "txn_count", "total_amount_usd"]
+    cols = ["daily_rank", "account_key", "risk_score", "why_flagged", "txn_count", "total_amount_usd"]
     if show_truth:
         cols.append("is_laundering")
     st.dataframe(
         queue[cols], width="stretch", hide_index=True, height=520,
         column_config={
             "daily_rank": "Rank", "account_key": "Account (bank:account)",
-            "bank_icon": st.column_config.ImageColumn(" ", width="small",
-                                                      help="Neutral icon, the banks in the dataset are synthetic"),
-            "bank": "Bank (id)",
             "risk_score": st.column_config.ProgressColumn("Risk score", min_value=0, max_value=100, format="%.1f"),
             "why_flagged": "Why flagged (top behaviours, points)",
             "txn_count": "Txns", "total_amount_usd": st.column_config.NumberColumn("Total USD", format="$%.0f"),
@@ -233,13 +226,6 @@ with tab_drill:
             hist["profile_date"] = hist["profile_date"].astype(str)
             today = hist[hist["profile_date"] == day]
             row = today.iloc[0] if len(today) else hist.iloc[-1]
-            bank_id = key.split(":")[0]
-            bn = run_query(f"SELECT bank_name, country FROM aml_clean.banks WHERE bank_id = '{bank_id}'")
-            bank_txt = bank_label(bn["bank_name"].iloc[0] if len(bn) else None, bank_id)
-            if len(bn) and bn["country"].iloc[0]:
-                bank_txt += f", {bn['country'].iloc[0]}"
-            st.markdown(f'<img src="{BANK_ICON_DATA_URL}" width="28" style="vertical-align:middle;margin-right:8px">'
-                        f"<b>{bank_txt}</b> &nbsp; account {key.split(':')[-1]}", unsafe_allow_html=True)
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Day shown", row["profile_date"])
             c2.metric("Risk score", f"{row['risk_score']:.1f}")
