@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -35,6 +36,7 @@ PLOT_CONFIG = {"displayModeBar": False}
 
 # Country name (as in the export) -> ISO 3166 code, shown as a flag image in the queue table.
 # Images, not emoji, because Windows browsers show flag emoji as two letters.
+# Covers every value of aml_clean.banks.country (33 countries + "Crypto", checked 2026-10-31).
 COUNTRY_ISO = {
     "Australia": "au", "Austria": "at", "Belgium": "be", "Brazil": "br", "Canada": "ca", "China": "cn",
     "Croatia": "hr", "Cyprus": "cy", "Estonia": "ee", "Finland": "fi", "France": "fr", "Germany": "de",
@@ -45,9 +47,22 @@ COUNTRY_ISO = {
 }
 
 
+def _badge(text, bg, fg="#FFFFFF"):
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30" viewBox="0 0 40 30">'
+           f'<rect width="40" height="30" rx="4" fill="{bg}"/><text x="20" y="21" font-family="Arial" '
+           f'font-size="16" font-weight="bold" fill="{fg}" text-anchor="middle">{text}</text></svg>')
+    return "data:image/svg+xml;utf8," + quote(svg)
+
+
+CRYPTO_BADGE = _badge("&#8383;", "#F2A900")   # Bitcoin sign: the dataset's crypto banks have no country
+UNKNOWN_BADGE = _badge("?", "#9CA3AF")         # any country not in COUNTRY_ISO
+
+
 def flag_url(country):
+    if country == "Crypto":
+        return CRYPTO_BADGE
     iso = COUNTRY_ISO.get(country)
-    return f"https://flagcdn.com/w40/{iso}.png" if iso else None
+    return f"https://flagcdn.com/w40/{iso}.png" if iso else UNKNOWN_BADGE
 
 st.set_page_config(page_title="BQ1 AML Investigator Queue", page_icon="🏦", layout="wide")
 
@@ -430,7 +445,7 @@ def render_queue_tab() -> None:
         column_config={
             "daily_rank": st.column_config.NumberColumn("Rank", format="%d"),
             bd.COUNTRY_COLUMN: st.column_config.ImageColumn(
-                "Country", width="small", help="Flag of the account's country (inferred from its transactions)"
+                "Country", width="small", help="Flag of the account's country (inferred from its transactions). Gold = crypto bank, grey ? = unknown"
             ),
             "bank_id": st.column_config.TextColumn("Bank ID"),
             "account_id": st.column_config.TextColumn("Account"),
