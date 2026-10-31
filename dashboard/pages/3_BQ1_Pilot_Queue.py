@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from urllib.parse import quote
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -34,13 +33,21 @@ MUTED = "#5B6675"
 GRID = "#EDF0F4"
 PLOT_CONFIG = {"displayModeBar": False}
 
-# The dataset contains anonymous synthetic bank IDs, not real institutions.
-# One neutral emblem improves scanning without suggesting a real-world identity.
-_BANK_ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-<rect width="48" height="48" rx="10" fill="#6B7280"/>
-<path d="M7 18 24 8l17 10v3H7v-3Zm4 6h5v12h-5V24Zm10.5 0h5v12h-5V24ZM32 24h5v12h-5V24ZM7 39h34v4H7v-4Z" fill="#FFFFFF"/>
-</svg>"""
-BANK_ICON_DATA_URL = "data:image/svg+xml;utf8," + quote(_BANK_ICON_SVG)
+# Country name (as in the export) -> ISO 3166 code, shown as a flag image in the queue table.
+# Images, not emoji, because Windows browsers show flag emoji as two letters.
+COUNTRY_ISO = {
+    "Australia": "au", "Austria": "at", "Belgium": "be", "Brazil": "br", "Canada": "ca", "China": "cn",
+    "Croatia": "hr", "Cyprus": "cy", "Estonia": "ee", "Finland": "fi", "France": "fr", "Germany": "de",
+    "Greece": "gr", "India": "in", "Ireland": "ie", "Israel": "il", "Italy": "it", "Japan": "jp",
+    "Latvia": "lv", "Lithuania": "lt", "Luxembourg": "lu", "Malta": "mt", "Mexico": "mx",
+    "Netherlands": "nl", "Portugal": "pt", "Russia": "ru", "Saudi Arabia": "sa", "Slovakia": "sk",
+    "Slovenia": "si", "Spain": "es", "Switzerland": "ch", "UK": "gb", "US": "us",
+}
+
+
+def flag_url(country):
+    iso = COUNTRY_ISO.get(country)
+    return f"https://flagcdn.com/w40/{iso}.png" if iso else None
 
 st.set_page_config(page_title="BQ1 AML Investigator Queue", page_icon="🏦", layout="wide")
 
@@ -406,7 +413,8 @@ def render_queue_tab() -> None:
     if show_ground_truth and bd.LABEL_COLUMN in selected.columns:
         table_columns.append(bd.LABEL_COLUMN)
     table = selected[table_columns].copy()
-    table.insert(1, "bank_icon", BANK_ICON_DATA_URL)
+    if bd.COUNTRY_COLUMN in table.columns:
+        table[bd.COUNTRY_COLUMN] = table[bd.COUNTRY_COLUMN].map(flag_url)
     for col in ["ach_share", "pass_through_share_24h"]:
         table[col] = table[col] * 100
     table["cross_border_share"] = table["cross_border_share"].map(bd._pct)
@@ -421,10 +429,9 @@ def render_queue_tab() -> None:
         height=420,
         column_config={
             "daily_rank": st.column_config.NumberColumn("Rank", format="%d"),
-            "bank_icon": st.column_config.ImageColumn(
-                "Bank", width="small", help="Neutral icon for a synthetic bank ID"
+            bd.COUNTRY_COLUMN: st.column_config.ImageColumn(
+                "Country", width="small", help="Flag of the account's country (inferred from its transactions)"
             ),
-            bd.COUNTRY_COLUMN: st.column_config.TextColumn("Country"),
             "bank_id": st.column_config.TextColumn("Bank ID"),
             "account_id": st.column_config.TextColumn("Account"),
             "account_key": st.column_config.TextColumn("Account key"),
