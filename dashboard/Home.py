@@ -15,4 +15,4 @@ with c2:
     st.subheader("BQ2: Laundering networks")
     st.write("How do laundering networks move funds differently from normal transactions, "
              "and which banks are disproportionate entry and exit points?")
-    st.page_link("pages/2_BQ2_Laundering_Networks.py", label="Open BQ2 dashboard", icon=":material/hub:")
+    st.page_link("pages/2_BQ2_Cross_bank_movement.py", label="Open BQ2 dashboard", icon=":material/hub:")

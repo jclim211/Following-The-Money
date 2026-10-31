@@ -3,3 +3,5 @@ boto3
 botocore[crt]
 pandas
 altair
+plotly
+networkx

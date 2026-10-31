@@ -13,8 +13,10 @@ context.md              this file
 dashboard/              ONE Streamlit app for both BQs (deployed to EC2)
   Home.py               landing page
   common/athena.py      shared run_query(sql, database) with caching. Use this, do not write your own boto3 code.
-  pages/1_BQ1_Account_Risk.py
-  pages/2_BQ2_Laundering_Networks.py   starter page, BQ2 team extends it
+  pages/1_BQ1_Account_Risk.py          BQ1 live from Athena: queue, capacity curve vs baseline, score distribution, drill-down
+  pages/2_BQ2_Cross_bank_movement.py   BQ2 live from Athena (aml_bq2_curated): flows, holding time, schemes, banks, network
+  pages/3_BQ1_Pilot_Queue.py           BQ1 pilot view from CSV exports in data_bq1/ (uses bq1_data.py)
+  bq1_data.py, data_bq1/               helpers and CSV exports for page 3
   requirements.txt      add any new Python package here (server installs it on deploy)
   run_dashboard.bat     run locally on Windows
 pipeline/               Spark jobs that run on EMR Serverless (copies of s3://is459-g7-projectbucket/scripts/)
@@ -42,7 +44,8 @@ Only touch resources named `is459-g7-*` or the bucket `is459-g7-projectbucket`.
 ## Data the dashboard reads
 
 - BQ1 (`aml_curated`): `risk_rankings` (one row per account per day, score, rank, points per behaviour), `account_labels` (IsLaundering per account-day, evaluation only), `account_profiles` (raw behaviours), `capacity_evaluation`, `capacity_summary`.
-- BQ2 (`aml_clean`): `schemes` (one row per scheme transfer), `banks`. When BQ2 writes curated tables, put them in `curated/bq2/` and register them in `aml_curated` (prefix `bq2_`). The server can already read `aml_curated`, `aml_clean` and `aml_metrics`.
+- BQ2 (`aml_bq2_curated`, data in `curated/bq2/`): `flow_comparison`, `holding_time`, `scheme_profile`, `country_pairs`, `bank_entry_exit`, `scheme_edges`, plus `aml_clean.banks` and `aml_raw.raw_accounts` for bank size.
+- The server can read `aml_curated`, `aml_bq2_curated`, `aml_clean`, `aml_raw` and `aml_metrics`. A new database needs adding to `deploy/iam-dashboard-policy.json` (ask Jie Ching).
 
 ## Do I need AWS access?
 
@@ -76,7 +79,7 @@ Mac: same steps with `python3 -m venv ~/.venvs/is459-bq1` and `~/.venvs/is459-bq
 
 ## Add or change a page
 
-1. Copy the pattern in `pages/2_BQ2_Laundering_Networks.py`:
+1. Use the shared helper (as `pages/1_BQ1_Account_Risk.py` does):
    ```python
    from common.athena import run_query
    df = run_query("SELECT ... FROM schemes", database="aml_clean")
@@ -86,6 +89,10 @@ Mac: same steps with `python3 -m venv ~/.venvs/is459-bq1` and `~/.venvs/is459-bq
 4. Test locally before pushing.
 
 ## How deploys work
+
+**There is one dashboard server: `is459-g7-dashboard`. Deploy only by pushing to GitHub `main`.**
+Do not copy files to `s3://is459-g7-projectbucket/scripts/dashboard/` or launch another EC2 for the dashboard. That S3 folder is old and no server reads it any more.
+To get push access, accept the GitHub invite to `jclim211/Following-The-Money` (ask Jie Ching if you have none).
 
 - The server is normally **stopped** to save budget. To use it: EC2 console > Instances > `is459-g7-dashboard` > Instance state > Start, wait about a minute, then open `http://<Public IPv4>:8501`. The Public IPv4 **changes on every start**, so copy it from the console each time. Stop it again when done.
 - Push to `main` on GitHub. The server checks GitHub every 2 minutes (`deploy/update.sh`, run by a systemd timer). If there is a new commit it pulls, installs `dashboard/requirements.txt` and restarts Streamlit.
