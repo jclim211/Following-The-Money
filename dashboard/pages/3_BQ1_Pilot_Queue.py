@@ -36,6 +36,7 @@ PLOT_CONFIG = {"displayModeBar": False}
 
 # Country name (as in the export) -> ISO 3166 code, shown as a flag image in the queue table.
 # Images, not emoji, because Windows browsers show flag emoji as two letters.
+# Fixed 40x30 images so every flag (and badge) is the same size; w40 heights vary 20 to 40px.
 # Covers every value of aml_clean.banks.country (33 countries + "Crypto", checked 2026-10-31).
 COUNTRY_ISO = {
     "Australia": "au", "Austria": "at", "Belgium": "be", "Brazil": "br", "Canada": "ca", "China": "cn",
@@ -62,7 +63,7 @@ def flag_url(country):
     if country == "Crypto":
         return CRYPTO_BADGE
     iso = COUNTRY_ISO.get(country)
-    return f"https://flagcdn.com/w40/{iso}.png" if iso else UNKNOWN_BADGE
+    return f"https://flagcdn.com/40x30/{iso}.png" if iso else UNKNOWN_BADGE
 
 st.set_page_config(page_title="BQ1 AML Investigator Queue", page_icon="🏦", layout="wide")
 
