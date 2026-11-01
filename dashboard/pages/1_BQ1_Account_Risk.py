@@ -267,9 +267,16 @@ with tab_ind:
     st.caption(f"Drop-one test at {capacity} accounts per day on the days picked in the sidebar. For each "
                "behaviour we re-rank every account without that behaviour's points and count how much "
                "laundering the queue still catches. A big drop means the behaviour matters.")
+    run_key = f"drop_one_{capacity}_{','.join(eval_days)}"
     if not eval_days:
         st.info("Pick at least one day in the sidebar.")
+    elif not st.session_state.get(run_key) and not st.button(
+            f"Run the drop-one test at {capacity}/day on {len(eval_days)} day(s)", type="primary",
+            help="Re-ranks every account 14 times, so it takes about 1.5 minutes on all 16 days. "
+                 "The result is cached for an hour."):
+        st.info("This test re-ranks about 15 million account-days, so it runs only when you click the button.")
     else:
+        st.session_state[run_key] = True
         total_pts = " + ".join(f"s.{c}" for c in POINT_COLS)
         rank_cols = ",\n".join(
             f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - {c} DESC, account_key) AS wo_{c},\n"
