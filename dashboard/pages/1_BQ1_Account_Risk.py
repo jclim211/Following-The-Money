@@ -279,8 +279,8 @@ with tab_ind:
         st.session_state[run_key] = True
         total_pts = " + ".join(f"s.{c}" for c in POINT_COLS)
         rank_cols = ",\n".join(
-            f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - {c} DESC, account_key) AS wo_{c},\n"
-            f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY {c} DESC, account_key) AS only_{c}"
+            f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - {c}, 4) DESC, total_amount_usd DESC, account_key) AS wo_{c},\n"
+            f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND({c}, 4) DESC, total_amount_usd DESC, account_key) AS only_{c}"
             for c in POINT_COLS)
         sums = ",\n".join(
             f"SUM(CASE WHEN wo_{c} <= {capacity} THEN y ELSE 0 END) AS wo_{c},\n"
@@ -288,7 +288,7 @@ with tab_ind:
             for c in POINT_COLS)
         drop = run_query(f"""
             WITH s AS (
-              SELECT r.profile_date, r.account_key, r.daily_rank, {', '.join('r.' + c for c in POINT_COLS)},
+              SELECT r.profile_date, r.account_key, r.daily_rank, r.total_amount_usd, {', '.join('r.' + c for c in POINT_COLS)},
                      COALESCE(l.account_day_is_laundering, 0) AS y
               FROM risk_rankings r
               LEFT JOIN account_labels l

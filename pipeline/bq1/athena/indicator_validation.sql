@@ -8,7 +8,7 @@
 -- The IsLaundering label is used only to evaluate, never to score.
 -- Change 100 (two places per behaviour) to test another daily capacity.
 WITH s AS (
-    SELECT r.profile_date, r.account_key, r.daily_rank,
+    SELECT r.profile_date, r.account_key, r.daily_rank, r.total_amount_usd,
            r.ach_points, r.cross_border_points, r.fan_out_points, r.fan_in_points, r.amount_band_points, r.pass_through_points, r.activity_spike_points,
            COALESCE(l.account_day_is_laundering, 0) AS y
     FROM aml_curated.risk_rankings r
@@ -18,20 +18,20 @@ WITH s AS (
     SELECT s.*, s.ach_points + s.cross_border_points + s.fan_out_points + s.fan_in_points + s.amount_band_points + s.pass_through_points + s.activity_spike_points AS full_pts FROM s
 ), ranked AS (
     SELECT y, daily_rank,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - ach_points DESC, account_key) AS wo_ach_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ach_points DESC, account_key) AS only_ach_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - cross_border_points DESC, account_key) AS wo_cross_border_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY cross_border_points DESC, account_key) AS only_cross_border_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - fan_out_points DESC, account_key) AS wo_fan_out_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY fan_out_points DESC, account_key) AS only_fan_out_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - fan_in_points DESC, account_key) AS wo_fan_in_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY fan_in_points DESC, account_key) AS only_fan_in_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - amount_band_points DESC, account_key) AS wo_amount_band_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY amount_band_points DESC, account_key) AS only_amount_band_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - pass_through_points DESC, account_key) AS wo_pass_through_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY pass_through_points DESC, account_key) AS only_pass_through_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - activity_spike_points DESC, account_key) AS wo_activity_spike_points,
-        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY activity_spike_points DESC, account_key) AS only_activity_spike_points
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - ach_points, 4) DESC, total_amount_usd DESC, account_key) AS wo_ach_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(ach_points, 4) DESC, total_amount_usd DESC, account_key) AS only_ach_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - cross_border_points, 4) DESC, total_amount_usd DESC, account_key) AS wo_cross_border_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(cross_border_points, 4) DESC, total_amount_usd DESC, account_key) AS only_cross_border_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - fan_out_points, 4) DESC, total_amount_usd DESC, account_key) AS wo_fan_out_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(fan_out_points, 4) DESC, total_amount_usd DESC, account_key) AS only_fan_out_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - fan_in_points, 4) DESC, total_amount_usd DESC, account_key) AS wo_fan_in_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(fan_in_points, 4) DESC, total_amount_usd DESC, account_key) AS only_fan_in_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - amount_band_points, 4) DESC, total_amount_usd DESC, account_key) AS wo_amount_band_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(amount_band_points, 4) DESC, total_amount_usd DESC, account_key) AS only_amount_band_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - pass_through_points, 4) DESC, total_amount_usd DESC, account_key) AS wo_pass_through_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(pass_through_points, 4) DESC, total_amount_usd DESC, account_key) AS only_pass_through_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - activity_spike_points, 4) DESC, total_amount_usd DESC, account_key) AS wo_activity_spike_points,
+        ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(activity_spike_points, 4) DESC, total_amount_usd DESC, account_key) AS only_activity_spike_points
     FROM t
 )
 SELECT

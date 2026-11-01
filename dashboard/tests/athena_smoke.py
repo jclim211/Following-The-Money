@@ -5,7 +5,7 @@ Usage (from dashboard/, AWS profile is459 signed in):  python tests/athena_smoke
 import time, boto3
 P = ["ach_points","cross_border_points","fan_out_points","fan_in_points","amount_band_points","pass_through_points","activity_spike_points"]
 days = ", ".join(f"'2022-09-{d:02d}'" for d in range(1, 17)); N = 100
-rank = ",\n".join(f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY full_pts - {c} DESC, account_key) AS wo_{c},\nROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY {c} DESC, account_key) AS only_{c}" for c in P)
+rank = ",\n".join(f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - {c}, 4) DESC, total_amount_usd DESC, account_key) AS wo_{c},\nROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND({c}, 4) DESC, total_amount_usd DESC, account_key) AS only_{c}" for c in P)
 sums = ",\n".join(f"SUM(CASE WHEN wo_{c} <= {N} THEN y ELSE 0 END) AS wo_{c},\nSUM(CASE WHEN only_{c} <= {N} THEN y ELSE 0 END) AS only_{c}" for c in P)
 QS = {
 "prior": f"""SELECT account_key, COUNT(DISTINCT profile_date) AS prior_flag_days, MIN(profile_date) AS first_flagged
@@ -26,7 +26,7 @@ WHERE l.profile_date IN ({days}) AND (r.daily_rank <= 2000 OR r.base_rank <= 200
 lim AS (SELECT n FROM UNNEST(SEQUENCE(50, 2000, 50)) AS t(n))
 SELECT lim.n AS daily_capacity, SUM(CASE WHEN j.daily_rank <= lim.n THEN j.y ELSE 0 END) AS caught_score,
 SUM(CASE WHEN j.base_rank <= lim.n THEN j.y ELSE 0 END) AS caught_baseline FROM lim CROSS JOIN j GROUP BY lim.n ORDER BY lim.n""",
-"drop": f"""WITH s AS (SELECT r.profile_date, r.account_key, r.daily_rank, {', '.join('r.' + c for c in P)}, COALESCE(l.account_day_is_laundering, 0) AS y
+"drop": f"""WITH s AS (SELECT r.profile_date, r.account_key, r.daily_rank, r.total_amount_usd, {', '.join('r.' + c for c in P)}, COALESCE(l.account_day_is_laundering, 0) AS y
 FROM risk_rankings r LEFT JOIN account_labels l ON l.account_key = r.account_key AND l.profile_date = r.profile_date WHERE r.profile_date IN ({days})),
 t AS (SELECT s.*, {' + '.join('s.' + c for c in P)} AS full_pts FROM s),
 ranked AS (SELECT y, daily_rank, {rank} FROM t)
