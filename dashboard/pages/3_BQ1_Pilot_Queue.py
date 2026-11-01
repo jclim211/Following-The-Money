@@ -1,6 +1,8 @@
 """BQ1 AML investigator dashboard (IS459 Group 7).
 
-Reads the two small curated exports from Athena (see README) and shows:
+Reads the BQ1 queue live from Athena (view aml_curated.bq1_dashboard_queue and
+table aml_curated.capacity_summary). If Athena cannot be reached it falls back to
+the CSV exports in dashboard/data_bq1/ (set BQ1_DATA_SOURCE=csv to force that). Shows:
   1. the daily top-100 investigator queue, with an explanation per account;
   2. the capacity trade-off behind the 100-reviews-per-day pilot;
   3. methodology, limitations and data checks.
@@ -132,31 +134,53 @@ def account_label(row) -> str:
     return f"#{int(row['daily_rank'])} · {row['account_key']}"
 
 
+ID_TEXT_COLUMNS = ("profile_date", "bank_id", "account_id", "account_key", "account_country")
+
+
+@st.cache_data(ttl=3600, show_spinner="Loading the BQ1 queue from Athena...")
+def load_athena():
+    """Live data: the same view the CSV export was made from (pipeline/bq1/athena/prepare_dashboard.sql)."""
+    from common.athena import run_query
+    queue = bd.prepare_queue(run_query(
+        "SELECT * FROM bq1_dashboard_queue ORDER BY profile_date, daily_rank", text_columns=ID_TEXT_COLUMNS))
+    capacity = bd.prepare_capacity(run_query("SELECT * FROM capacity_summary ORDER BY daily_capacity"))
+    return queue, capacity, bd.run_checks(queue, capacity)
+
+
 @st.cache_data(show_spinner=False)
-def load(data_dir: str):
+def load_csv(data_dir: str):
     queue = bd.load_queue(Path(data_dir) / bd.QUEUE_FILE)
     capacity = bd.load_capacity(Path(data_dir) / bd.CAPACITY_FILE)
     return queue, capacity, bd.run_checks(queue, capacity)
 
 
 # ---------------------------------------------------------------------------
-# Load data (stop with clear instructions if the exports are missing)
+# Load data: live Athena first, CSV export as a fallback
 # ---------------------------------------------------------------------------
-missing = [f for f in (bd.QUEUE_FILE, bd.CAPACITY_FILE) if not (DATA_DIR / f).exists()]
-if missing:
-    st.title("BQ1 AML Investigator Queue")
-    st.error(
-        f"Missing data file(s) in `{DATA_DIR}`: {', '.join(missing)}.\n\n"
-        "Export them from Athena (README, step 1) and save them into the `data/` folder."
-    )
-    st.stop()
+data_source, athena_error = "csv", None
+if os.environ.get("BQ1_DATA_SOURCE", "athena").lower() != "csv":
+    try:
+        queue, capacity, checks = load_athena()
+        data_source = "athena"
+    except Exception as err:  # no credentials, network, schema change: fall back to the export
+        athena_error = str(err)[:200]
 
-try:
-    queue, capacity, checks = load(str(DATA_DIR))
-except bd.SchemaError as err:
-    st.title("BQ1 AML Investigator Queue")
-    st.error(f"The exported CSV does not match the expected Athena schema.\n\n{err}")
-    st.stop()
+if data_source == "csv":
+    missing = [f for f in (bd.QUEUE_FILE, bd.CAPACITY_FILE) if not (DATA_DIR / f).exists()]
+    if missing:
+        st.title("BQ1 AML Investigator Queue")
+        st.error(
+            f"Athena could not be reached ({athena_error}) and the data file(s) {', '.join(missing)} "
+            f"are missing in `{DATA_DIR}`.\n\n"
+            "Export them from Athena (README, step 1) and save them into the `data_bq1/` folder."
+        )
+        st.stop()
+    try:
+        queue, capacity, checks = load_csv(str(DATA_DIR))
+    except bd.SchemaError as err:
+        st.title("BQ1 AML Investigator Queue")
+        st.error(f"The exported CSV does not match the expected Athena schema.\n\n{err}")
+        st.stop()
 
 failed = [c for c in checks if not c.passed]
 dates = sorted(queue["profile_date"].unique(), reverse=True)
@@ -230,6 +254,11 @@ with st.sidebar:
         st.caption("Ground-truth toggle will appear when the evaluation label is included in the export.")
 
     st.divider()
+    if data_source == "athena":
+        st.caption("Data: live from Athena (aml_curated.bq1_dashboard_queue), refreshed hourly.")
+    else:
+        st.caption("Data: CSV export in data_bq1/"
+                   + (f" (Athena unavailable: {athena_error})" if athena_error else "") + ".")
     if failed:
         st.error(f"Data checks: {len(failed)} of {len(checks)} failed. See the Methodology tab.")
     else:
@@ -429,6 +458,10 @@ def render_queue_tab() -> None:
     if show_ground_truth and bd.LABEL_COLUMN in selected.columns:
         table_columns.append(bd.LABEL_COLUMN)
     table = selected[table_columns].copy()
+    # New vs repeat: was this account already in the top N on an earlier date?
+    history = bd.alert_history(queue, date, daily_capacity).set_index("account_key")["alert_status"]
+    table.insert(table_columns.index("account_key") + 1, "alert_status",
+                 table["account_key"].map(history).fillna("New"))
     if bd.COUNTRY_COLUMN in table.columns:
         table[bd.COUNTRY_COLUMN] = table[bd.COUNTRY_COLUMN].map(flag_url)
     for col in ["ach_share", "pass_through_share_24h"]:
@@ -451,6 +484,8 @@ def render_queue_tab() -> None:
             "bank_id": st.column_config.TextColumn("Bank ID"),
             "account_id": st.column_config.TextColumn("Account"),
             "account_key": st.column_config.TextColumn("Account key"),
+            "alert_status": st.column_config.TextColumn(
+                "Alert status", help=f"Repeat = already in the top {daily_capacity} on an earlier date"),
             "risk_score": st.column_config.NumberColumn("Risk score", format="%.2f"),
             "txn_count": st.column_config.NumberColumn("Transactions", format="%d"),
             "total_amount_usd": st.column_config.NumberColumn("Value (USD)", format="$%.2f"),
@@ -651,8 +686,9 @@ active account per date. Every profile gets up to 100 points from seven behaviou
 #### Adding a new date
 1. Upload the new raw transactions to S3 and refresh the crawler if needed.
 2. Run the Glue cleaning job, then `account_profiles.py` and `risk_scoring.py` on EMR Serverless.
-3. Refresh the curated partitions. The Athena view keeps ranks 1–100 for the new date automatically.
-4. Re-export the two CSVs (README, step 1). The app opens on the newest date.
+3. Refresh the curated partitions. The Athena view keeps ranks 1–1,000 for the new date automatically.
+4. The page reads the Athena view live, so the new date appears within the hour. Re-export the two
+   CSVs (README, step 1) only to refresh the offline fallback.
 """
         )
     with right:
@@ -666,7 +702,7 @@ active account per date. Every profile gets up to 100 points from seven behaviou
 - **100 reviews/day assumes a small pilot team.** Other capacities are in the trade-off tab.
 - **Detection metrics depend on the dataset's labels.**
 - **Batch, not real time.** The pipeline is run per batch of dates.
-- **This version reads exported CSVs**, not a live Athena connection. The enriched queue must
+- **Live data needs AWS access.** Without it the page falls back to the CSV export, which must
   include ranks 1-1,000 plus the optional daily population, country and evaluation-label fields.
 """
         )

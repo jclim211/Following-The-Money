@@ -32,8 +32,12 @@ def athena_client():
 
 
 @st.cache_data(ttl=3600, show_spinner="Querying Athena...")
-def run_query(sql: str, database: str = "aml_curated") -> pd.DataFrame:
-    """Run a read-only query and return the result as a DataFrame."""
+def run_query(sql: str, database: str = "aml_curated", text_columns: tuple = ()) -> pd.DataFrame:
+    """Run a read-only query and return the result as a DataFrame.
+
+    Columns named in text_columns are left as text (for IDs such as bank_id that
+    look numeric but must keep their exact spelling).
+    """
     athena = athena_client()
     qid = athena.start_query_execution(
         QueryString=sql,
@@ -64,6 +68,8 @@ def run_query(sql: str, database: str = "aml_curated") -> pd.DataFrame:
     header = [c.get("VarCharValue") for c in rows[0]["Data"]]
     df = pd.DataFrame([[c.get("VarCharValue") for c in r["Data"]] for r in rows[1:]], columns=header)
     for col in df.columns:  # Athena returns text; turn numeric columns into numbers
+        if col in text_columns:
+            continue
         converted = pd.to_numeric(df[col], errors="coerce")
         if converted.notna().sum() == df[col].notna().sum():
             df[col] = converted
