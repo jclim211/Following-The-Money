@@ -118,33 +118,44 @@ def _to_numeric(df: pd.DataFrame, cols: list[str], name: str) -> None:
         df[col] = converted
 
 
-def load_queue(path: str | Path) -> pd.DataFrame:
-    """Load a ranked investigator export (100-1,000 rows per date)."""
-    string_cols = ID_COLUMNS + [COUNTRY_COLUMN]
-    df = pd.read_csv(path, dtype={c: "string" for c in string_cols})
-    _check_columns(df, QUEUE_COLUMNS, "Queue CSV")
+def prepare_queue(df: pd.DataFrame) -> pd.DataFrame:
+    """Check and type a ranked investigator queue (CSV export or live Athena result)."""
+    df = df.copy()
+    _check_columns(df, QUEUE_COLUMNS, "Queue data")
     for col in ID_COLUMNS:
-        df[col] = df[col].str.strip()
+        df[col] = df[col].astype("string").str.strip()
     if COUNTRY_COLUMN in df.columns:
-        df[COUNTRY_COLUMN] = df[COUNTRY_COLUMN].fillna("Unknown").str.strip().replace("", "Unknown")
+        df[COUNTRY_COLUMN] = (df[COUNTRY_COLUMN].astype("string").fillna("Unknown")
+                              .str.strip().replace("", "Unknown"))
     df["profile_date"] = pd.to_datetime(df["profile_date"], errors="raise").dt.normalize()
     optional_numeric = [c for c in [ACTIVE_COLUMN, LABEL_COLUMN] if c in df.columns]
-    _to_numeric(df, INT_COLUMNS + MEASURE_COLUMNS + optional_numeric, "Queue CSV")
+    _to_numeric(df, INT_COLUMNS + MEASURE_COLUMNS + optional_numeric, "Queue data")
     for col in INT_COLUMNS + optional_numeric:
         if (df[col].dropna() % 1 != 0).any():
-            raise SchemaError(f"Queue CSV: column '{col}' should hold whole numbers")
+            raise SchemaError(f"Queue data: column '{col}' should hold whole numbers")
         df[col] = df[col].astype("Int64")
     return df.sort_values(["profile_date", "daily_rank"]).reset_index(drop=True)
 
 
-def load_capacity(path: str | Path) -> pd.DataFrame:
-    """Load the 5-row capacity summary export."""
-    df = pd.read_csv(path)
-    _check_columns(df, CAPACITY_COLUMNS, "Capacity CSV")
-    _to_numeric(df, CAPACITY_COLUMNS, "Capacity CSV")
+def load_queue(path: str | Path) -> pd.DataFrame:
+    """Load a ranked investigator export (100-1,000 rows per date) from CSV."""
+    string_cols = ID_COLUMNS + [COUNTRY_COLUMN]
+    return prepare_queue(pd.read_csv(path, dtype={c: "string" for c in string_cols}))
+
+
+def prepare_capacity(df: pd.DataFrame) -> pd.DataFrame:
+    """Check and type the capacity summary (CSV export or live Athena result)."""
+    df = df.copy()
+    _check_columns(df, CAPACITY_COLUMNS, "Capacity data")
+    _to_numeric(df, CAPACITY_COLUMNS, "Capacity data")
     df["daily_capacity"] = df["daily_capacity"].astype("Int64")
     df["days_evaluated"] = df["days_evaluated"].astype("Int64")
     return df.sort_values("daily_capacity").reset_index(drop=True)
+
+
+def load_capacity(path: str | Path) -> pd.DataFrame:
+    """Load the 5-row capacity summary export from CSV."""
+    return prepare_capacity(pd.read_csv(path))
 
 
 # ---------------------------------------------------------------------------
@@ -342,3 +353,76 @@ def random_review_reference(capacity: pd.DataFrame) -> dict:
         "base_rate": base_rate,
         "lift": row["overall_precision"] / base_rate,
     }
+
+
+# ---------------------------------------------------------------------------
+# New vs repeat alerts
+# ---------------------------------------------------------------------------
+def alert_history(queue: pd.DataFrame, date, capacity: int) -> pd.DataFrame:
+    """For each account in the top `capacity` on `date`, how often it was already
+    in the top `capacity` on earlier dates.
+
+    Returns columns account_key, prior_flag_days, first_flagged, alert_status
+    ("New" or "Repeat (n earlier days)").
+    """
+    date = pd.Timestamp(date)
+    flagged = queue[queue["daily_rank"] <= capacity]
+    today = flagged.loc[flagged["profile_date"] == date, ["account_key"]].drop_duplicates()
+    earlier = flagged[(flagged["profile_date"] < date) & flagged["account_key"].isin(today["account_key"])]
+    hist = (earlier.groupby("account_key")["profile_date"]
+            .agg(prior_flag_days="nunique", first_flagged="min").reset_index())
+    out = today.merge(hist, on="account_key", how="left")
+    out["prior_flag_days"] = out["prior_flag_days"].fillna(0).astype(int)
+    out["alert_status"] = out["prior_flag_days"].map(
+        lambda n: "New" if n == 0 else f"Repeat ({n} earlier day{'s' if n > 1 else ''})")
+    return out
+
+
+def new_vs_repeat_by_day(queue: pd.DataFrame, capacity: int) -> pd.DataFrame:
+    """Per date: how many of the top `capacity` accounts are flagged for the first time."""
+    flagged = queue.loc[queue["daily_rank"] <= capacity, ["profile_date", "account_key"]]
+    first = flagged.groupby("account_key")["profile_date"].transform("min")
+    flagged = flagged.assign(is_new=(flagged["profile_date"] == first))
+    out = flagged.groupby("profile_date")["is_new"].agg(new_accounts="sum", queue_size="size").reset_index()
+    out["repeat_accounts"] = out["queue_size"] - out["new_accounts"]
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Recommended daily cut-off
+# ---------------------------------------------------------------------------
+def knee_capacity(capacities, caught) -> int:
+    """Capacity at the 'knee' of the detection curve (Kneedle method).
+
+    Both axes are scaled to 0-1 and the knee is the point furthest above the
+    straight line from the first to the last point: after it, each extra
+    review adds noticeably less detection.
+    """
+    x = pd.Series(capacities, dtype=float).reset_index(drop=True)
+    y = pd.Series(caught, dtype=float).reset_index(drop=True)
+    if len(x) < 3 or x.max() == x.min() or y.max() == y.min():
+        return int(x.iloc[0])
+    xn = (x - x.min()) / (x.max() - x.min())
+    yn = (y - y.min()) / (y.max() - y.min())
+    return int(x.iloc[int((yn - xn).idxmax())])
+
+
+def marginal_yield(capacities, caught, n_days: int) -> pd.DataFrame:
+    """Laundering found per 100 extra reviews for each step up in daily capacity."""
+    df = pd.DataFrame({"daily_capacity": list(capacities), "caught": list(caught)}).astype(float)
+    df = df.sort_values("daily_capacity").reset_index(drop=True)
+    extra_reviews = df["daily_capacity"].diff() * n_days
+    df["found_per_100_extra"] = 100 * df["caught"].diff() / extra_reviews
+    return df
+
+
+def threshold_capacity(capacities, caught, n_days: int, min_per_100: float) -> int:
+    """Largest capacity reached before an extra step finds fewer than
+    `min_per_100` laundering accounts per 100 extra reviews."""
+    m = marginal_yield(capacities, caught, n_days)
+    chosen = int(m["daily_capacity"].iloc[0])
+    for row in m.iloc[1:].itertuples():
+        if row.found_per_100_extra < min_per_100:
+            break
+        chosen = int(row.daily_capacity)
+    return chosen
