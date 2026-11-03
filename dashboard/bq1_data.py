@@ -14,6 +14,13 @@ import pandas as pd
 import time
 import boto3
 
+AWS_REGION = "us-east-1"
+ATHENA_DATABASE = "aml_curated"
+ATHENA_OUTPUT_LOCATION = (
+    "s3://is459-g7-projectbucket/athena-results/dashboard/"
+)
+ATHENA_WORKGROUP = "primary"
+
 # ---------------------------------------------------------------------------
 # File names and expected schema (from the BQ1 handoff, sections 11-12)
 # ---------------------------------------------------------------------------
