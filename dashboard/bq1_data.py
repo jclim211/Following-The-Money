@@ -21,6 +21,74 @@ ATHENA_OUTPUT_LOCATION = (
 )
 ATHENA_WORKGROUP = "primary"
 
+def run_athena_query(sql: str) -> pd.DataFrame:
+    """Run an Athena query and return its results as a DataFrame."""
+    athena = boto3.client("athena", region_name=AWS_REGION)
+
+    response = athena.start_query_execution(
+        QueryString=sql,
+        QueryExecutionContext={"Database": ATHENA_DATABASE},
+        ResultConfiguration={
+            "OutputLocation": ATHENA_OUTPUT_LOCATION
+        },
+        WorkGroup=ATHENA_WORKGROUP,
+    )
+
+    execution_id = response["QueryExecutionId"]
+
+    while True:
+        execution = athena.get_query_execution(
+            QueryExecutionId=execution_id
+        )
+        status = execution["QueryExecution"]["Status"]["State"]
+
+        if status == "SUCCEEDED":
+            break
+
+        if status in {"FAILED", "CANCELLED"}:
+            reason = execution["QueryExecution"]["Status"].get(
+                "StateChangeReason",
+                "No failure reason returned",
+            )
+            raise RuntimeError(
+                f"Athena query {status.lower()}: {reason}"
+            )
+
+        time.sleep(1)
+
+    paginator = athena.get_paginator("get_query_results")
+    pages = paginator.paginate(QueryExecutionId=execution_id)
+
+    columns = None
+    records = []
+    skip_header = True
+
+    for page in pages:
+        result_set = page["ResultSet"]
+
+        if columns is None:
+            columns = [
+                column["Label"]
+                for column in result_set["ResultSetMetadata"][
+                    "ColumnInfo"
+                ]
+            ]
+
+        for row in result_set["Rows"]:
+            if skip_header:
+                skip_header = False
+                continue
+
+            values = [
+                item.get("VarCharValue")
+                for item in row.get("Data", [])
+            ]
+
+            values.extend([None] * (len(columns) - len(values)))
+            records.append(values)
+
+    return pd.DataFrame(records, columns=columns)
+
 # ---------------------------------------------------------------------------
 # File names and expected schema (from the BQ1 handoff, sections 11-12)
 # ---------------------------------------------------------------------------
