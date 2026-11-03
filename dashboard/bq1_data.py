@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+import time
+import boto3
 
 # ---------------------------------------------------------------------------
 # File names and expected schema (from the BQ1 handoff, sections 11-12)
