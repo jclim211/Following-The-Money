@@ -142,8 +142,8 @@ def load_athena():
     """Live data: the same view the CSV export was made from (pipeline/bq1/athena/prepare_dashboard.sql)."""
     from common.athena import run_query
     queue = bd.prepare_queue(run_query(
-        "SELECT * FROM bq1_dashboard_queue ORDER BY profile_date, daily_rank", text_columns=ID_TEXT_COLUMNS))
-    capacity = bd.prepare_capacity(run_query("SELECT * FROM capacity_summary ORDER BY daily_capacity"))
+        "dashboard_queue", text_columns=ID_TEXT_COLUMNS))
+    capacity = bd.prepare_capacity(run_query("capacity_summary"))
     return queue, capacity, bd.run_checks(queue, capacity)
 
 
@@ -255,7 +255,7 @@ with st.sidebar:
 
     st.divider()
     if data_source == "athena":
-        st.caption("Data: live from Athena (aml_curated.bq1_dashboard_queue), refreshed hourly.")
+        st.caption("Data: Athena results read from S3 (aml_curated.bq1_dashboard_queue), refreshed hourly.")
     else:
         st.caption("Data: CSV export in data_bq1/"
                    + (f" (Athena unavailable: {athena_error})" if athena_error else "") + ".")

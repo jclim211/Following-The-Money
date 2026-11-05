@@ -1,14 +1,17 @@
 """
-Shared Athena helper for every dashboard page (BQ1 and BQ2).
+Shared Athena + S3 helper for the BQ1 dashboard pages.
+
+Flow: SQL file in S3 -> Athena runs it and writes a CSV to S3 -> Streamlit reads that CSV from S3.
 
     from common.athena import run_query
-    df = run_query("SELECT ... FROM risk_rankings", database="aml_curated")
+    df = run_query("queue_top_accounts", {"profile_date": "2022-09-16", "top_n": 100})
 
 Locally it uses AWS profile `is459`. On EC2 it uses the instance role
 (BQ1_AWS_PROFILE is set to empty there). Results are cached for an hour,
 and Athena also reuses identical results for 60 minutes to keep costs low.
 """
 import os
+import re
 import time
 
 import boto3
@@ -19,55 +22,68 @@ from botocore.exceptions import ProfileNotFound
 REGION = os.getenv("BQ1_REGION", "us-east-1")
 PROFILE = os.getenv("BQ1_AWS_PROFILE", "is459")
 WORKGROUP = "primary"
-ATHENA_OUTPUT = "s3://is459-g7-projectbucket/athena-results/streamlit/"
+BUCKET = "is459-g7-projectbucket"
+QUERY_PREFIX = "scripts/queries"
+ATHENA_OUTPUT = f"s3://{BUCKET}/athena-results"
 
 
 @st.cache_resource
-def athena_client():
+def aws_session():
     try:
-        session = boto3.Session(profile_name=PROFILE, region_name=REGION) if PROFILE else boto3.Session(region_name=REGION)
+        return boto3.Session(profile_name=PROFILE, region_name=REGION) if PROFILE else boto3.Session(region_name=REGION)
     except ProfileNotFound:
-        session = boto3.Session(region_name=REGION)
-    return session.client("athena")
+        return boto3.Session(region_name=REGION)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_sql(path: str) -> str:
+    """Read a stored query from S3, e.g. path = bq1/dashboard/capacity_summary."""
+    obj = aws_session().client("s3").get_object(Bucket=BUCKET, Key=f"{QUERY_PREFIX}/{path}.sql")
+    return obj["Body"].read().decode("utf-8")
+
+
+def fill_placeholders(sql: str, params: dict) -> str:
+    """Put values into the SQL. Callers pass only validated values, never raw free text."""
+    for key, value in params.items():
+        sql = sql.replace("{" + key + "}", str(value))
+    left = re.findall(r"\{[a-z_]+\}", sql)
+    if left:
+        raise ValueError(f"Stored query still has unfilled placeholders: {sorted(set(left))}")
+    return sql
 
 
 @st.cache_data(ttl=3600, show_spinner="Querying Athena...")
-def run_query(sql: str, database: str = "aml_curated", text_columns: tuple = ()) -> pd.DataFrame:
-    """Run a read-only query and return the result as a DataFrame.
+def run_query(name: str, params: dict = None, database: str = "aml_curated",
+              folder: str = "bq1/dashboard", text_columns: tuple = ()) -> pd.DataFrame:
+    """Run a stored read-only query and read its result CSV from S3.
 
     Columns named in text_columns are left as text (for IDs such as bank_id that
     look numeric but must keep their exact spelling).
     """
-    athena = athena_client()
+    session = aws_session()
+    athena = session.client("athena")
     qid = athena.start_query_execution(
-        QueryString=sql,
+        QueryString=fill_placeholders(load_sql(f"{folder}/{name}"), params or {}),
         QueryExecutionContext={"Database": database},
         WorkGroup=WORKGROUP,
-        ResultConfiguration={"OutputLocation": ATHENA_OUTPUT},
+        ResultConfiguration={"OutputLocation": f"{ATHENA_OUTPUT}/{folder}/{name}/"},
         ResultReuseConfiguration={"ResultReuseByAgeConfiguration": {"Enabled": True, "MaxAgeInMinutes": 60}},
     )["QueryExecutionId"]
 
     while True:
-        status = athena.get_query_execution(QueryExecutionId=qid)["QueryExecution"]["Status"]
+        execution = athena.get_query_execution(QueryExecutionId=qid)["QueryExecution"]
+        status = execution["Status"]
         if status["State"] in ("SUCCEEDED", "FAILED", "CANCELLED"):
             break
         time.sleep(0.5)
     if status["State"] != "SUCCEEDED":
         raise RuntimeError(status.get("StateChangeReason", status["State"]))
 
-    rows, token = [], None
-    while True:
-        kwargs = {"QueryExecutionId": qid, "MaxResults": 1000}
-        if token:
-            kwargs["NextToken"] = token
-        page = athena.get_query_results(**kwargs)
-        rows.extend(page["ResultSet"]["Rows"])
-        token = page.get("NextToken")
-        if not token:
-            break
-    header = [c.get("VarCharValue") for c in rows[0]["Data"]]
-    df = pd.DataFrame([[c.get("VarCharValue") for c in r["Data"]] for r in rows[1:]], columns=header)
-    for col in df.columns:  # Athena returns text; turn numeric columns into numbers
+    # A reused result can live in an older folder, so always use the location Athena reports.
+    bucket, key = execution["ResultConfiguration"]["OutputLocation"].removeprefix("s3://").split("/", 1)
+    body = session.client("s3").get_object(Bucket=bucket, Key=key)["Body"]
+    df = pd.read_csv(body, dtype=str, keep_default_na=False, na_values=[""])
+    for col in df.columns:  # CSV is text; turn numeric columns into numbers
         if col in text_columns:
             continue
         converted = pd.to_numeric(df[col], errors="coerce")

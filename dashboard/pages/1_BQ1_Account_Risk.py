@@ -1,7 +1,7 @@
 """
 BQ1 | Which accounts should investigators review first?
 
-Reads the live BQ1 outputs in Athena (Glue database aml_curated):
+Runs the stored queries in S3 on Athena and reads the result CSVs from S3 (Glue database aml_curated):
   risk_rankings, account_labels, account_profiles, capacity_summary
 
 Tabs: investigator queue (with new vs repeat alerts), capacity vs detection
@@ -36,16 +36,12 @@ def why_flagged(row, top=3) -> str:
     return ", ".join(f"{name} {p:.0f}" for p, name in pts)
 
 
-def day_filter(col: str, days: list) -> str:
-    return f"{col} IN ({', '.join(repr(d) for d in days)})"
-
-
 # ---------------------------------------------------------------- layout
 st.set_page_config(page_title="BQ1 Investigator Queue", page_icon="🏦", layout="wide")
 st.title("🏦 BQ1: Which accounts should investigators review first?")
-st.caption("Live from Athena (aml_curated). Risk score 0 to 100 = sum of weight x behaviour score.")
+st.caption("Athena results read from S3 (aml_curated). Risk score 0 to 100 = sum of weight x behaviour score.")
 
-all_days = run_query("SELECT DISTINCT profile_date FROM risk_rankings ORDER BY 1")["profile_date"].astype(str).tolist()
+all_days = run_query("available_dates")["profile_date"].astype(str).tolist()
 
 with st.sidebar:
     st.header("Controls")
@@ -56,6 +52,7 @@ with st.sidebar:
     show_truth = st.toggle("Show ground truth (IsLaundering)", value=True,
                            help="Labels are only used to evaluate the score, never to compute it.")
     st.caption(f"{len(all_days)} days loaded: {all_days[0]} to {all_days[-1]}")
+date_list = ", ".join(repr(d) for d in eval_days)  # values come from the Athena date list
 
 tab_queue, tab_curve, tab_ind, tab_dist, tab_drill = st.tabs(
     ["Investigator queue", "Capacity vs detection", "Which indicators matter", "Score distribution",
@@ -63,26 +60,12 @@ tab_queue, tab_curve, tab_ind, tab_dist, tab_drill = st.tabs(
 
 # ---------------------------------------------------------------- 1. queue
 with tab_queue:
-    queue = run_query(f"""
-        SELECT r.daily_rank, r.account_key, r.bank_id, r.account_id, r.risk_score, r.txn_count,
-               r.total_amount_usd, r.daily_active_accounts, {', '.join('r.' + c for c in POINT_COLS)},
-               COALESCE(l.account_day_is_laundering, 0) AS is_laundering
-        FROM risk_rankings r
-        LEFT JOIN account_labels l
-          ON l.account_key = r.account_key AND l.profile_date = r.profile_date
-        WHERE r.profile_date = '{day}' AND r.daily_rank <= {capacity}
-        ORDER BY r.daily_rank""")
+    queue = run_query("queue_top_accounts", {"profile_date": day, "top_n": capacity})
     queue["why_flagged"] = queue.apply(why_flagged, axis=1)
 
     # New vs repeat: was this account already in the top N on an earlier day?
-    prior = run_query(f"""
-        SELECT account_key, COUNT(DISTINCT profile_date) AS prior_flag_days,
-               MIN(profile_date) AS first_flagged
-        FROM risk_rankings
-        WHERE profile_date < '{day}' AND daily_rank <= {capacity}
-          AND account_key IN (SELECT account_key FROM risk_rankings
-                              WHERE profile_date = '{day}' AND daily_rank <= {capacity})
-        GROUP BY account_key""", text_columns=("account_key", "first_flagged"))
+    prior = run_query("queue_prior_flag_days", {"profile_date": day, "top_n": capacity},
+                      text_columns=("account_key", "first_flagged"))
     queue = queue.merge(prior, on="account_key", how="left") if len(prior) else queue.assign(
         prior_flag_days=0, first_flagged=None)
     queue["prior_flag_days"] = queue["prior_flag_days"].fillna(0).astype(int)
@@ -91,8 +74,7 @@ with tab_queue:
     n_new = int((queue["prior_flag_days"] == 0).sum())
 
     caught = int(queue["is_laundering"].sum())
-    total_day = int(run_query(f"SELECT SUM(account_day_is_laundering) AS t FROM account_labels "
-                              f"WHERE profile_date = '{day}'")["t"].iloc[0])
+    total_day = int(run_query("kpi_day_laundering_total", {"profile_date": day})["t"].iloc[0])
     active = int(queue["daily_active_accounts"].iloc[0]) if len(queue) else 0
 
     c1, c2, c3, c4 = st.columns(4)
@@ -123,21 +105,7 @@ with tab_queue:
         })
 
     with st.expander(f"New vs repeat alerts across all days (top {capacity})"):
-        trend = run_query(f"""
-            WITH q AS (
-              SELECT r.profile_date, r.account_key, COALESCE(l.account_day_is_laundering, 0) AS y
-              FROM risk_rankings r
-              LEFT JOIN account_labels l
-                ON l.account_key = r.account_key AND l.profile_date = r.profile_date
-              WHERE r.daily_rank <= {capacity}),
-            f AS (SELECT account_key, MIN(profile_date) AS first_day FROM q GROUP BY account_key)
-            SELECT q.profile_date,
-                   SUM(CASE WHEN q.profile_date = f.first_day THEN 1 ELSE 0 END) AS new_accounts,
-                   SUM(CASE WHEN q.profile_date > f.first_day THEN 1 ELSE 0 END) AS repeat_accounts,
-                   SUM(CASE WHEN q.profile_date = f.first_day THEN q.y ELSE 0 END) AS new_laundering,
-                   SUM(CASE WHEN q.profile_date > f.first_day THEN q.y ELSE 0 END) AS repeat_laundering
-            FROM q JOIN f ON f.account_key = q.account_key
-            GROUP BY q.profile_date ORDER BY q.profile_date""", text_columns=("profile_date",))
+        trend = run_query("queue_new_vs_repeat", {"top_n": capacity}, text_columns=("profile_date",))
         long = trend.melt("profile_date", ["new_accounts", "repeat_accounts"], "status", "accounts")
         long["status"] = long["status"].map({"new_accounts": "New", "repeat_accounts": "Repeat"})
         st.altair_chart(
@@ -171,23 +139,8 @@ with tab_curve:
     if not eval_days:
         st.info("Pick at least one day in the sidebar.")
     else:
-        curve = run_query(f"""
-            WITH r AS (
-              SELECT profile_date, account_key, daily_rank,
-                     ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY txn_count DESC, account_key) AS base_rank
-              FROM risk_rankings WHERE {day_filter('profile_date', eval_days)}),
-            j AS (
-              SELECT r.daily_rank, r.base_rank, l.account_day_is_laundering AS y
-              FROM r JOIN account_labels l
-                ON l.account_key = r.account_key AND l.profile_date = r.profile_date
-              WHERE {day_filter('l.profile_date', eval_days)} AND (r.daily_rank <= 2000 OR r.base_rank <= 2000)),
-            lim AS (SELECT n FROM UNNEST(SEQUENCE(50, 2000, 50)) AS t(n))
-            SELECT lim.n AS daily_capacity,
-                   SUM(CASE WHEN j.daily_rank <= lim.n THEN j.y ELSE 0 END) AS caught_score,
-                   SUM(CASE WHEN j.base_rank  <= lim.n THEN j.y ELSE 0 END) AS caught_baseline
-            FROM lim CROSS JOIN j GROUP BY lim.n ORDER BY lim.n""")
-        total = int(run_query(f"SELECT SUM(account_day_is_laundering) AS t FROM account_labels "
-                              f"WHERE {day_filter('profile_date', eval_days)}")["t"].iloc[0])
+        curve = run_query("capacity_vs_baseline", {"date_list": date_list})
+        total = int(run_query("kpi_period_laundering_total", {"date_list": date_list})["t"].iloc[0])
         n_days = len(eval_days)
         curve["Our risk score"] = 100 * curve["caught_score"] / total
         curve["Baseline: most transactions"] = 100 * curve["caught_baseline"] / total
@@ -258,7 +211,7 @@ with tab_curve:
                    "reviews. Grey bars fall below your rule. Red line = knee of the detection curve.")
 
         with st.expander("Stored results from the scoring job (capacity_summary)"):
-            st.dataframe(run_query("SELECT * FROM capacity_summary ORDER BY daily_capacity"),
+            st.dataframe(run_query("capacity_summary"),
                          width="stretch", hide_index=True)
 
 # ---------------------------------------------------------------- 3. which indicators matter
@@ -277,27 +230,8 @@ with tab_ind:
         st.info("This test re-ranks about 15 million account-days, so it runs only when you click the button.")
     else:
         st.session_state[run_key] = True
-        total_pts = " + ".join(f"s.{c}" for c in POINT_COLS)
-        rank_cols = ",\n".join(
-            f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND(full_pts - {c}, 4) DESC, total_amount_usd DESC, account_key) AS wo_{c},\n"
-            f"ROW_NUMBER() OVER (PARTITION BY profile_date ORDER BY ROUND({c}, 4) DESC, total_amount_usd DESC, account_key) AS only_{c}"
-            for c in POINT_COLS)
-        sums = ",\n".join(
-            f"SUM(CASE WHEN wo_{c} <= {capacity} THEN y ELSE 0 END) AS wo_{c},\n"
-            f"SUM(CASE WHEN only_{c} <= {capacity} THEN y ELSE 0 END) AS only_{c}"
-            for c in POINT_COLS)
-        drop = run_query(f"""
-            WITH s AS (
-              SELECT r.profile_date, r.account_key, r.daily_rank, r.total_amount_usd, {', '.join('r.' + c for c in POINT_COLS)},
-                     COALESCE(l.account_day_is_laundering, 0) AS y
-              FROM risk_rankings r
-              LEFT JOIN account_labels l
-                ON l.account_key = r.account_key AND l.profile_date = r.profile_date
-              WHERE {day_filter('r.profile_date', eval_days)}),
-            t AS (SELECT s.*, {total_pts} AS full_pts FROM s),
-            ranked AS (SELECT y, daily_rank, {rank_cols} FROM t)
-            SELECT SUM(CASE WHEN daily_rank <= {capacity} THEN y ELSE 0 END) AS caught_all, {sums}
-            FROM ranked""").iloc[0]
+        drop = run_query("indicator_contribution", {"date_list": date_list, "top_n": capacity},
+                         folder="bq1/analysis").iloc[0]
         all_caught = int(drop["caught_all"])
         res = pd.DataFrame([{
             "behaviour": BEHAVIOURS[c][0], "weight": BEHAVIOURS[c][1],
@@ -342,14 +276,7 @@ with tab_ind:
 
 # ---------------------------------------------------------------- 4. score distribution
 with tab_dist:
-    dist = run_query(f"""
-        SELECT FLOOR(r.risk_score / 2.5) * 2.5 AS score_bin,
-               COALESCE(l.account_day_is_laundering, 0) AS is_laundering, COUNT(*) AS accounts
-        FROM risk_rankings r
-        LEFT JOIN account_labels l
-          ON l.account_key = r.account_key AND l.profile_date = r.profile_date
-        WHERE r.profile_date = '{day}'
-        GROUP BY 1, 2""")
+    dist = run_query("score_distribution", {"profile_date": day})
     dist["group"] = dist["is_laundering"].map({1: "Laundering", 0: "Normal"})
     dist["share"] = 100 * dist["accounts"] / dist.groupby("group")["accounts"].transform("sum")
     cutoff = float(queue["risk_score"].min()) if len(queue) else None
@@ -381,16 +308,8 @@ with tab_drill:
         key = None
 
     if key:
-        hist = run_query(f"""
-            SELECT r.profile_date, r.daily_rank, r.daily_active_accounts, r.risk_score,
-                   {', '.join('r.' + c for c in POINT_COLS)},
-                   COALESCE(l.account_day_is_laundering, 0) AS is_laundering
-            FROM risk_rankings r
-            LEFT JOIN account_labels l
-              ON l.account_key = r.account_key AND l.profile_date = r.profile_date
-            WHERE r.account_key = '{key}'
-            ORDER BY r.profile_date""")
-        prof = run_query(f"SELECT * FROM account_profiles WHERE account_key = '{key}' AND profile_date = '{day}'")
+        hist = run_query("account_score_history", {"account_key": key})
+        prof = run_query("account_profile_detail", {"account_key": key, "profile_date": day})
 
         if hist.empty:
             st.warning("No scores found for this account.")
