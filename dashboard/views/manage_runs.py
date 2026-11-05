@@ -7,7 +7,7 @@ from common.runs import read_log, registry
 
 theme.page_header("Manage runs",
                   "Each run is the whole pipeline (BQ1 and BQ2) on one dataset. Runs listed here appear in the "
-                  "menu at the top.", eyebrow="Runs")
+                  "menu at the top.", eyebrow="Runs · Manage runs")
 reg = registry()
 runs = reg.list_runs()
 
@@ -19,8 +19,8 @@ if runs:
 else:
     st.info("No runs are registered. Restore one below, or add one to runs.json (see README).")
 
-with st.container(border=True):
-    st.markdown("#### Delete a run")
+with theme.card("card_delete"):
+    theme.section("Delete a run", "Type the dataset name to confirm", "delete", theme.RED)
     st.caption("Step 1 removes the run from the dashboard (registry only). Step 2, deleting its S3 outputs and "
                "Athena tables, is not connected yet: per-run storage is still being built, so nothing in AWS "
                "is deleted. The planned deletion is written to the log instead.")
@@ -43,8 +43,9 @@ with st.container(border=True):
 
 hidden = reg.deleted_runs()
 if hidden:
-    with st.container(border=True):
-        st.markdown("#### Removed runs")
+    with theme.card("card_removed"):
+        theme.section("Removed runs", "Hidden from the dashboard; restore to show them again", "restore_from_trash",
+                      theme.GREY)
         for r in hidden:
             c1, c2 = st.columns([4, 1], vertical_alignment="center")
             c1.markdown(f"**{r.name}** · created {r.created_at}")

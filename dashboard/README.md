@@ -4,9 +4,9 @@ One Streamlit app for BQ1 and BQ2. Run, deploy and data details are in [../conte
 
 | File | What |
 |---|---|
-| `Home.py` | Entry point (`streamlit run Home.py`): top navigation, header bar with the dataset-run menu |
-| `common/theme.py` | Design tokens (SnowUI style), shared CSS, Plotly and Altair chart themes, KPI tiles and cards. All colours live here |
-| `common/ui.py` | Header bar with the run menu, and the shared Top 5 / 10 / 20 / All selector |
+| `Home.py` | Entry point (`streamlit run Home.py`): run bar, section menu, the page, then "Up next" |
+| `common/theme.py` | Design tokens (Revolut style), shared CSS, Plotly and Altair chart themes, KPI tiles, cards, `theme.plotly_chart()`. All colours live here |
+| `common/ui.py` | Run bar with the run menu, the two-level menu (sections, then pages with "Next"), "Up next", and the shared Top 5 / 10 / 20 / All selector |
 | `common/runs.py`, `runs.json` | Run registry (stub): which dataset runs exist and which Athena databases each one reads |
 | `common/athena.py` | Shared `run_query()` for BQ1 (S3 .sql → Athena → S3 .csv), with caching |
 | `common/bq2.py` | BQ2 queries (unchanged), scheme drawing, bank path pipeline, bank and scheme popups |
@@ -24,10 +24,19 @@ One Streamlit app for BQ1 and BQ2. Run, deploy and data details are in [../conte
 
 ## Pages and navigation
 
-Pages live in `views/` and are registered in `Home.py` (`st.navigation`, menu at the top). A new page is a new
-file in `views/` plus one `st.Page(...)` line in `Home.py`. Start each page with
-`theme.page_header(...)` and take colours from `common/theme.py`, never hard-coded hex values.
-BQ2 pages end with `bq2.show_popups()` so a clicked bank or scheme opens in a popup.
+Pages live in `views/` and are grouped into sections in `Home.py` (Overview, BQ1, BQ2, Runs). The top of every
+page is the run bar, then the section tabs, then the pages of the current section with a "Next" button; the
+order of `sections` in `Home.py` is the reading order. A new page is a new file in `views/` plus one `st.Page(...)`
+line in its section in `Home.py`. Start each page with `theme.page_header(...)` and take colours from
+`common/theme.py`, never hard-coded hex values. BQ2 pages end with `bq2.show_popups()` so a clicked bank or
+scheme opens in a popup.
+
+Design rules (details at the top of `common/theme.py`):
+- Blue means clickable: buttons, links and page pills. The selected tab or option is black.
+- White cards on a grey canvas; each card heading has a coloured icon chip.
+- Charts are at most about a quarter of the screen (`theme.CHART_H`); Plotly charts zoom, Altair charts open full
+  screen. Draw Plotly charts with `theme.plotly_chart(fig, ...)`, because Streamlit otherwise paints its own
+  grey background and font over the figure.
 
 ## Dataset runs
 

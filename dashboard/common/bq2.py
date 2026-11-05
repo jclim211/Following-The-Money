@@ -376,8 +376,8 @@ def scheme_flow_figure(ed: pd.DataFrame, sel_bank=None, height=None) -> go.Figur
         fig.add_shape(type="rect", x0=x0, x1=x1, y0=y_bot + 0.3, y1=y_top - 0.3, layer="below",
                       fillcolor=fill, line=dict(color=line, width=1, dash=dash))
 
-    block(X_ENT - 0.9, X_ENT + 0.9, "#E9F7F1", theme.ENTRY)
-    block(X_EXT - 0.9, X_EXT + 0.9, "#FFEDED", theme.EXIT)
+    block(X_ENT - 0.9, X_ENT + 0.9, theme.GREEN_SOFT, theme.ENTRY)
+    block(X_EXT - 0.9, X_EXT + 0.9, theme.RED_SOFT, theme.EXIT)
     if middle:
         block(MID_L, MID_R, theme.CANVAS, theme.FAINT, "dot")
     mid_banks = len({_acc_bank(a) for a in middle})
@@ -431,8 +431,8 @@ def scheme_flow_figure(ed: pd.DataFrame, sel_bank=None, height=None) -> go.Figur
             hoverinfo="text",
             marker=dict(size=22 if kind != "M" else 14, color=color, opacity=0.95,
                         line=dict(width=[3.5 if m else 1.5 for m in mine],
-                                  color=[theme.S_YELLOW if m else theme.SURFACE for m in mine]))))
-    fig.update_layout(height=height or int(max(300, 90 * (y_top - y_bot) + 40)),
+                                  color=[theme.SELECTED if m else theme.SURFACE for m in mine]))))
+    fig.update_layout(height=height or int(min(380, max(260, 70 * (y_top - y_bot) + 40))),
                       margin=dict(l=0, r=0, t=6, b=0), dragmode="pan", showlegend=False, hovermode="closest",
                       xaxis=dict(visible=False, range=[-1.3, 11.3]),
                       yaxis=dict(visible=False, range=[y_bot - 0.2, y_top + 0.6]))
@@ -485,7 +485,7 @@ def bank_pipeline_html(sid, sel_bank=None, max_mid: int = 6) -> str:
         return (f'<div class="blk {cls}{sel}"><div class="k">{kind} bank{"s" if len(banks) > 1 else ""}</div>'
                 + "".join(items) + more + "</div>")
 
-    chev = '<span class="chev">›</span>'
+    chev = f'<span class="chev">{theme.icon("chevron_right", theme.FAINT, 18)}</span>'
     if mids:
         cards = [card(b, *recv(b)) for b in mids]
         shown = chev.join(cards[:max_mid])
@@ -497,7 +497,7 @@ def bank_pipeline_html(sid, sel_bank=None, max_mid: int = 6) -> str:
         mid_html = ('<div class="blk mid empty"><div class="k">Intermediary banks</div>'
                     '<div class="meta" style="margin-top:8px">None: money goes straight from the entry '
                     'bank(s) to the exit bank(s).</div></div>')
-    arrow = '<div class="arrow">→</div>'
+    arrow = f'<div class="arrow">{theme.icon("arrow_forward", theme.GREY, 26)}</div>'
     return (f'<div class="pipe">{end_block("Entry", ent_b, "sends")}{arrow}{mid_html}{arrow}'
             f'{end_block("Exit", ext_b, "last in")}</div>')
 
@@ -602,7 +602,7 @@ def ego_figure(sel) -> go.Figure:
                              textposition="top center", showlegend=False, customdata=[["edge"]],
                              hoverinfo="text", hovertext=[f"<b>{name_of(sel)}</b> (selected)"],
                              marker=dict(size=30, symbol="diamond", color=theme.INK,
-                                         line=dict(width=2, color=theme.S_YELLOW))))
+                                         line=dict(width=2, color=theme.SELECTED))))
     rows = max(len(left), len(right), 1)
     ego.update_layout(height=max(320, 30 * rows), margin=dict(l=0, r=0, t=10, b=0), dragmode="pan",
                       xaxis=dict(visible=False, range=[-1.1, 3.1]), yaxis=dict(visible=False),
@@ -621,18 +621,19 @@ def bank_dialog(sel):
     rr = ratios.loc[sel] if sel in ratios.index else None
     size_txns, size_acc = inf["total_txns"].get(sel), inf["n_accounts"].get(sel)
 
-    st.markdown(f'<div class="snow-eyebrow">{theme.esc(country_of(sel))} · bank {sel}</div>'
-                f'<div class="snow-title">{theme.esc(name_of(sel).split(" (")[0])}</div>'
+    st.markdown(f'<div class="rv-eyebrow" style="margin-top:0">{theme.esc(country_of(sel))} · bank {sel}</div>'
+                f'<div class="rv-title">{theme.esc(name_of(sel).split(" (")[0])}</div>'
                 f'<div style="margin:6px 0 14px">{theme.pill(s["role"], ROLE_COLORS[s["role"]])}</div>',
                 unsafe_allow_html=True)
     ratio_txt = ("n/a" if rr is None else
                  " / ".join("n/a" if pd.isna(v) else f"{v:.1f}x" for v in (rr["entry_ratio"], rr["exit_ratio"])))
     theme.kpi_row([
-        ("Schemes through it", f"{int(s['n_schemes']):,}", "all scheme types"),
-        ("Entries / exits", f"{int(s['entries'])} / {int(s['exits'])}", "schemes entering / leaving here"),
-        ("Entry / exit ratio", ratio_txt, "actual / expected for its size"),
+        ("Schemes through it", f"{int(s['n_schemes']):,}", "all scheme types", "account_tree", theme.PURPLE),
+        ("Entries / exits", f"{int(s['entries'])} / {int(s['exits'])}", "schemes entering / leaving here",
+         "sync_alt", theme.GREEN),
+        ("Entry / exit ratio", ratio_txt, "actual / expected for its size", "balance", theme.ORANGE),
         ("Size", "n/a" if pd.isna(size_txns) else f"{int(size_txns):,} txns",
-         "" if pd.isna(size_acc) else f"{int(size_acc):,} accounts"),
+         "" if pd.isna(size_acc) else f"{int(size_acc):,} accounts", "groups", theme.BLUE),
     ])
 
     bs = bank_schemes(sel)
@@ -651,10 +652,11 @@ def bank_dialog(sel):
             key=f"dlg_tbl_{sel}_{n}_{len(roles)}", on_select="rerun", selection_mode="single-row",
             width="stretch", hide_index=True, height=min(420, 38 + 35 * max(len(tbl), 1)),
             column_config={
-                "scheme_id": "Scheme", "scheme_type": "Type", "role": "This bank is",
+                "scheme_id": st.column_config.NumberColumn("Scheme", format="#%d"), "scheme_type": "Type",
+                "role": "This bank is",
                 "first_seen": "First appears at", "other_banks": "Other banks", "n_transfers": "Transfers",
                 "duration_hours": st.column_config.NumberColumn("Duration (h)", format="%.0f"),
-                "total_usd": st.column_config.NumberColumn("Total USD", format="$%.0f"),
+                "total_usd": st.column_config.NumberColumn("Total USD", format="dollar", step=1),
             })
         st.caption("Entry and exit schemes first, then schemes where the bank is in the middle; largest USD first. "
                    "Select a row to see its bank path.")
@@ -662,14 +664,14 @@ def bank_dialog(sel):
         pick = int(tbl.iloc[rows[0]]["scheme_id"]) if rows else (int(tbl.iloc[0]["scheme_id"]) if len(tbl) else None)
         if pick is not None:
             r = bs[bs["scheme_id"] == pick].iloc[0]
-            st.markdown(f"**Scheme #{pick} · {r['scheme_type']}** · this bank: "
+            st.markdown(f"**Bank path of scheme #{pick} · {r['scheme_type']}** · this bank: "
                         f"{theme.pill(r['role'], SCHEME_ROLE_COLORS[r['role']])}", unsafe_allow_html=True)
             st.markdown(bank_pipeline_html(pick, sel), unsafe_allow_html=True)
             if st.button(f"Open scheme #{pick}", type="primary", key=f"dlg_open_{sel}_{pick}"):
                 open_scheme(pick, from_bank=sel)
                 st.rerun()
     with tab_flow:
-        st.plotly_chart(ego_figure(sel), key=f"dlg_ego_{sel}", width="stretch",
+        theme.plotly_chart(ego_figure(sel), key=f"dlg_ego_{sel}", width="stretch",
                         config={"displayModeBar": False})
         st.caption("Money flows left to right through the selected bank (black diamond). Line width = number of "
                    "schemes. Up to 15 banks per side, most schemes first.")
@@ -681,24 +683,26 @@ def scheme_dialog(sid, from_bank=None):
     p = prof[prof["scheme_id"] == sid].iloc[0]
     ed = scheme_edges_of(sid)
     sel_bank = from_bank
-    st.markdown(f'<div class="snow-eyebrow">{theme.esc(p["scheme_type"])}</div>'
-                f'<div class="snow-title">Scheme #{int(sid)}</div>'
-                f'<div class="snow-subtitle">{theme.esc(SCHEME_TYPES.get(p["scheme_type"], ""))}</div>',
+    st.markdown(f'<div class="rv-eyebrow" style="margin-top:0">{theme.esc(p["scheme_type"])}</div>'
+                f'<div class="rv-title">Scheme #{int(sid)}</div>'
+                f'<div class="rv-subtitle">{theme.esc(SCHEME_TYPES.get(p["scheme_type"], ""))}</div>',
                 unsafe_allow_html=True)
     theme.kpi_row([
-        ("Transfers / accounts", f"{int(p['n_transfers'])} / {int(p['n_accounts'])}"),
-        ("Banks / countries", f"{int(p['n_banks'])} / {int(p['n_countries'])}"),
-        ("Duration", f"{p['duration_hours']:.0f} h"),
-        ("Total", f"${p['total_usd']:,.0f}"),
+        ("Transfers / accounts", f"{int(p['n_transfers'])} / {int(p['n_accounts'])}", "", "swap_horiz", theme.BLUE),
+        ("Banks / countries", f"{int(p['n_banks'])} / {int(p['n_countries'])}", "", "account_balance", theme.PURPLE),
+        ("Duration", f"{p['duration_hours']:.0f} h", "first to last transfer", "schedule", theme.ORANGE),
+        ("Total", f"${p['total_usd']:,.0f}", "sum of transfers, USD", "payments", theme.GREEN),
     ])
-    st.markdown("**Bank path in time order**")
+    theme.section("Bank path in time order", "Entry bank → banks the money passes through → exit bank",
+                  "route", theme.BLUE)
     st.markdown(bank_pipeline_html(sid, sel_bank), unsafe_allow_html=True)
 
-    st.markdown("**How the money moves between accounts**")
+    theme.section("How the money moves between accounts", "Scroll to zoom, drag to pan, hover a dot for details",
+                  "hub", theme.PURPLE)
     theme.legend([(theme.ENTRY, "entry account (only sends)"), (theme.INK, "intermediary account"),
                   (theme.EXIT, "exit account (only receives)")]
-                 + ([(theme.S_YELLOW, "★ selected bank")] if sel_bank is not None else []))
-    ev = st.plotly_chart(scheme_flow_figure(ed, sel_bank), key=f"scheme_graph_{int(sid)}", on_select="rerun",
+                 + ([(theme.SELECTED, "★ selected bank (yellow ring)")] if sel_bank is not None else []))
+    ev = theme.plotly_chart(scheme_flow_figure(ed, sel_bank), key=f"scheme_graph_{int(sid)}", on_select="rerun",
                          selection_mode="points", width="stretch",
                          config={"scrollZoom": True, "displayModeBar": False})
     st.caption("Numbers on the arrows are the time order; hover a dot for amount, payment format and time. "
@@ -717,7 +721,8 @@ def scheme_dialog(sid, from_bank=None):
         st.dataframe(shown[["order", "ts", "src", "dst", "from_country", "to_country", "amount_usd",
                             "payment_format"]],
                      width="stretch", hide_index=True,
-                     column_config={"order": "#", "amount_usd": st.column_config.NumberColumn("USD", format="$%.0f")})
+                     column_config={"order": "#",
+                                    "amount_usd": st.column_config.NumberColumn("USD", format="dollar", step=1)})
     with st.expander(f"About {p['scheme_type']} schemes"):
         st.markdown(describe_type(p["scheme_type"], prof))
     if from_bank is not None:
@@ -738,8 +743,8 @@ def show_popups():
 
 def bank_button_list(df: pd.DataFrame, col: str, key: str, n: int | None):
     """A ranked list of banks as buttons; clicking opens the bank popup."""
-    for b, r in ui.head(df[df[col] > 0].sort_values(col, ascending=False), n).iterrows():
-        st.button(f"{short_name(b, 30)} · {r[col]:,}", key=f"rank_{key}_{b}", on_click=open_bank, args=(int(b),),
+    for i, (b, r) in enumerate(ui.head(df[df[col] > 0].sort_values(col, ascending=False), n).iterrows(), 1):
+        st.button(f"{i}.  {short_name(b, 30)} · **{r[col]:,}**", key=f"rank_{key}_{b}", on_click=open_bank, args=(int(b),),
                   width="stretch")
 
 

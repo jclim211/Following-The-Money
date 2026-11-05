@@ -1,27 +1,67 @@
-"""Landing page: what this run is and where to go. No numbers here (the BQ2 Summary has the headline figures)."""
+"""Landing page: what this run is, the two business questions, and where each page answers them. No numbers."""
 import streamlit as st
 
 from common import theme
 from common.runs import current_run
 
 run = current_run()
-theme.page_header("Following the Money",
-                  "Two business questions on the IBM AML transactions, answered from the pipeline's Athena "
-                  "outputs. Pick a dataset run in the header; every page then shows that run.",
-                  eyebrow=f"{run.name} · {run.period}" if run.period else run.name)
+st.markdown(
+    f'<div class="rv-hero"><div class="k">{theme.esc(run.name)} · dataset run</div>'
+    '<div class="t">Following the money between banks</div>'
+    '<div class="s">Two business questions answered from the pipeline\'s Athena outputs: which accounts an '
+    'investigation team should review first, and how laundering networks move money between banks.</div>'
+    '<div class="tags">'
+    + "".join(f'<span class="tag">{theme.icon(i, "#FFFFFF", 16)}&nbsp; {theme.esc(t)}</span>'
+              for i, t in [("calendar_month", run.period or run.created_at), ("database", "Athena · S3"),
+                           ("bolt", "Cached for 1 hour"), ("verified", run.status)])
+    + "</div></div>", unsafe_allow_html=True)
+st.write("")
 
-c1, c2 = st.columns(2)
-with c1.container(border=True):
-    st.markdown('<div class="snow-eyebrow">BQ2</div>', unsafe_allow_html=True)
-    st.markdown("#### Laundering networks")
-    st.write("How do laundering networks move funds differently from normal transactions, and which banks are "
-             "disproportionate entry and exit points?")
-    st.page_link("views/bq2_summary.py", label="Open the BQ2 summary", icon=":material/arrow_forward:")
-with c2.container(border=True):
-    st.markdown('<div class="snow-eyebrow">BQ1</div>', unsafe_allow_html=True)
-    st.markdown("#### Account risk prioritisation")
-    st.write("Which accounts should investigators review first under limited daily capacity, and which "
-             "behaviours matter most?")
-    st.page_link("views/bq1_account_risk.py", label="Open BQ1 account risk", icon=":material/arrow_forward:")
+PAGES_BQ1 = [
+    ("views/bq1_account_risk.py", "Account risk", ":material/manage_search:",
+     "Daily investigator queue, capacity vs detection, which behaviours matter, account drill-down"),
+    ("views/bq1_pilot_queue.py", "Pilot queue", ":material/fact_check:",
+     "The 100-reviews-per-day pilot: queue with explanations, capacity trade-off, methodology"),
+]
+PAGES_BQ2 = [
+    ("views/bq2_summary.py", "Summary", ":material/insights:", "Headline numbers, findings and the top 5 banks and schemes"),
+    ("views/bq2_banks.py", "Entry and exit banks", ":material/account_balance:",
+     "Where schemes put money in and take it out, against each bank's size"),
+    ("views/bq2_schemes.py", "Schemes", ":material/account_tree:", "Every reconstructed scheme, drawn entry → exit"),
+    ("views/bq2_routes.py", "Country routes", ":material/travel_explore:", "Where laundering crosses borders"),
+    ("views/bq2_flows.py", "Laundering vs normal", ":material/compare_arrows:",
+     "Payment formats, borders, currencies and holding time"),
+]
 
-st.caption("Data flow: S3 (.sql) → Athena → S3 (result .csv) → this app. Results are cached for an hour.")
+
+def question_card(key, tag, title, question, ic, color, pages):
+    with theme.card(key):
+        st.markdown(f'<div class="rv-qcard-head">{theme.chip(ic, color, 52)}<div><div class="k">{tag}</div>'
+                    f'<div class="t">{title}</div></div></div><div class="rv-qcard-q">{question}</div>',
+                    unsafe_allow_html=True)
+        for path, label, icon, desc in pages:
+            st.page_link(path, label=label, icon=icon)
+            st.caption(desc)
+
+
+c1, c2 = st.columns(2, gap="medium")
+with c1:
+    question_card("card_q1", "BQ1", "Account risk prioritisation",
+                  "Which accounts should investigators review first under limited daily capacity, and which "
+                  "behaviours matter most?", "person_search", theme.PURPLE, PAGES_BQ1)
+with c2:
+    question_card("card_q2", "BQ2", "Laundering networks",
+                  "How do laundering networks move funds differently from normal transactions, and which banks "
+                  "are disproportionate entry and exit points?", "hub", theme.PINK, PAGES_BQ2)
+
+st.write("")
+theme.section("How the data gets here", "Every number on these pages comes from this pipeline",
+              "conversion_path", theme.TEAL)
+st.markdown('<div class="rv-steps">' + "".join(
+    f'<div class="rv-step">{theme.chip(i, c, 40)}<div><div class="n">{n}</div><div class="d">{d}</div></div></div>'
+    for i, c, n, d in [
+        ("cloud_upload", theme.BLUE, "S3 raw data", "IBM AML transactions, accounts and patterns"),
+        ("memory", theme.PURPLE, "Spark on EMR", "Cleaning, account profiles, risk scores, schemes"),
+        ("table_view", theme.ORANGE, "Athena", "Stored .sql queries write result .csv files to S3"),
+        ("monitoring", theme.GREEN, "This dashboard", "Reads the result files, cached for an hour"),
+    ]) + "</div>", unsafe_allow_html=True)

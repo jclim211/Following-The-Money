@@ -94,7 +94,7 @@ with tab_queue:
     if show_truth:
         cols.append("is_laundering")
     st.dataframe(
-        queue[cols], width="stretch", hide_index=True, height=520,
+        queue[cols], width="stretch", hide_index=True, height=420,
         column_config={
             "daily_rank": "Rank", "account_key": "Account (bank:account)",
             "risk_score": st.column_config.ProgressColumn("Risk score", min_value=0, max_value=100, format="%.1f"),
@@ -105,15 +105,20 @@ with tab_queue:
             "is_laundering": st.column_config.CheckboxColumn("Laundering"),
         })
 
-    with st.expander(f"New vs repeat alerts across all days (top {capacity})"):
+    left_c, right_c = st.columns(2, gap="medium")
+    with right_c:
+        theme.section(f"New vs repeat alerts, top {capacity}", "across all days", "autorenew", theme.PURPLE)
         trend = run_query("queue_new_vs_repeat", {"top_n": capacity}, text_columns=("profile_date",))
         long = trend.melt("profile_date", ["new_accounts", "repeat_accounts"], "status", "accounts")
         long["status"] = long["status"].map({"new_accounts": "New", "repeat_accounts": "Repeat"})
         st.altair_chart(
             alt.Chart(long).mark_bar().encode(
-                x=alt.X("profile_date:O", title=None), y=alt.Y("accounts:Q", title="Accounts in queue"),
-                color=alt.Color("status:N", title=None, legend=alt.Legend(orient="bottom")),
-                tooltip=["profile_date", "status", "accounts"]),
+                x=alt.X("profile_date:O", title=None,
+                        axis=alt.Axis(labelAngle=-45, labelExpr="slice(datum.label, 5)")),   # 09-01, not 2022-09-01
+                y=alt.Y("accounts:Q", title="Accounts"),
+                color=alt.Color("status:N", title=None, legend=alt.Legend(orient="bottom"),
+                                scale=alt.Scale(range=[theme.BLUE, theme.PURPLE])),
+                tooltip=["profile_date", "status", "accounts"]).properties(height=theme.CHART_H - 60),
             width="stretch")
         rep_total, new_total = int(trend["repeat_accounts"].sum()), int(trend["new_accounts"].sum())
         msg = (f"Over {len(trend)} days, {rep_total:,} of {rep_total + new_total:,} queue slots "
@@ -124,16 +129,18 @@ with tab_queue:
                     f"{100 * rl / max(rep_total, 1):.1f}% for repeat alerts.")
         st.caption(msg + " Repeat alerts can be routed to the analyst who already reviewed the account.")
 
-    st.subheader(f"What drives the top {capacity} (average points per behaviour)")
-    drivers = queue[POINT_COLS].mean().rename(lambda c: BEHAVIOURS[c][0]).reset_index()
-    drivers.columns = ["behaviour", "avg_points"]
-    drivers["max_points"] = [BEHAVIOURS[c][1] for c in POINT_COLS]
-    st.altair_chart(
-        alt.Chart(drivers).mark_bar().encode(
-            x=alt.X("avg_points:Q", title="Average points (bar) out of the weight"),
-            y=alt.Y("behaviour:N", sort="-x", title=None),
-            tooltip=["behaviour", alt.Tooltip("avg_points:Q", format=".1f"), "max_points"]),
-        width="stretch")
+    with left_c:
+        theme.section(f"What drives the top {capacity}", "average points per behaviour", "tune", theme.BLUE)
+        drivers = queue[POINT_COLS].mean().rename(lambda c: BEHAVIOURS[c][0]).reset_index()
+        drivers.columns = ["behaviour", "avg_points"]
+        drivers["max_points"] = [BEHAVIOURS[c][1] for c in POINT_COLS]
+        st.altair_chart(
+            alt.Chart(drivers).mark_bar().encode(
+                x=alt.X("avg_points:Q", title="Average points (bar) out of the weight"),
+                y=alt.Y("behaviour:N", sort="-x", title=None),
+                tooltip=["behaviour", alt.Tooltip("avg_points:Q", format=".1f"), "max_points"]
+            ).properties(height=theme.CHART_H - 40),
+            width="stretch")
 
 # ---------------------------------------------------------------- 2. capacity curve
 with tab_curve:
@@ -157,59 +164,63 @@ with tab_curve:
         lift = at["caught_score"] / at["caught_baseline"] if at["caught_baseline"] else float("nan")
         c3.metric("Lift over baseline", f"{lift:.1f}x")
 
-        metric = st.radio("Show", ["Detection rate (% of all laundering caught)", "Precision (% of queue that is laundering)"],
-                          horizontal=True)
-        if metric.startswith("Detection"):
-            long = curve.melt("daily_capacity", ["Our risk score", "Baseline: most transactions"], "method", "pct")
-            y_title = "% of laundering account-days caught"
-        else:
-            long = curve.rename(columns={"precision_score": "Our risk score",
-                                         "precision_baseline": "Baseline: most transactions"}) \
-                        .melt("daily_capacity", ["Our risk score", "Baseline: most transactions"], "method", "pct")
-            y_title = "% of reviewed accounts that are laundering"
-        line = alt.Chart(long).mark_line(point=True).encode(
-            x=alt.X("daily_capacity:Q", title="Accounts reviewed per day (top N)"),
-            y=alt.Y("pct:Q", title=y_title),
-            color=alt.Color("method:N", title=None, legend=alt.Legend(orient="bottom")),
-            tooltip=["daily_capacity", "method", alt.Tooltip("pct:Q", format=".2f")])
-        rule = alt.Chart(pd.DataFrame({"x": [capacity]})).mark_rule(strokeDash=[4, 4]).encode(x="x:Q")
-        st.altair_chart(line + rule, width="stretch")
-        st.caption(f"{n_days} day(s), {total:,} laundering account-days in total. "
-                   "Look for where the curve flattens: extra reviews stop catching much more. "
-                   "Baseline ranks accounts by transaction count only.")
+        cl, cr = st.columns(2, gap="medium")
+        with cl:
+            theme.section("Capacity vs detection", "our risk score against the transaction-count baseline", "show_chart", theme.BLUE)
+            metric = st.radio("Show", ["Detection rate (% of all laundering caught)", "Precision (% of queue that is laundering)"],
+                              horizontal=True)
+            if metric.startswith("Detection"):
+                long = curve.melt("daily_capacity", ["Our risk score", "Baseline: most transactions"], "method", "pct")
+                y_title = "% of laundering account-days caught"
+            else:
+                long = curve.rename(columns={"precision_score": "Our risk score",
+                                             "precision_baseline": "Baseline: most transactions"}) \
+                            .melt("daily_capacity", ["Our risk score", "Baseline: most transactions"], "method", "pct")
+                y_title = "% of reviewed accounts that are laundering"
+            line = alt.Chart(long).mark_line(point=True).encode(
+                x=alt.X("daily_capacity:Q", title="Accounts reviewed per day (top N)"),
+                y=alt.Y("pct:Q", title=y_title),
+                color=alt.Color("method:N", title=None, legend=alt.Legend(orient="bottom"),
+                                scale=alt.Scale(range=[theme.GREY, theme.BLUE])),
+                tooltip=["daily_capacity", "method", alt.Tooltip("pct:Q", format=".2f")])
+            rule = alt.Chart(pd.DataFrame({"x": [capacity]})).mark_rule(strokeDash=[4, 4]).encode(x="x:Q")
+            st.altair_chart((line + rule).properties(height=theme.CHART_H - 20), width="stretch")
+            st.caption(f"{n_days} day(s), {total:,} laundering account-days in total. "
+                       "Look for where the curve flattens: extra reviews stop catching much more. "
+                       "Baseline ranks accounts by transaction count only.")
 
-        # ------------------------------------------------ recommended daily cut-off
-        st.subheader("Recommended daily alert limit")
-        knee = bd.knee_capacity(curve["daily_capacity"], curve["caught_score"])
-        marg = bd.marginal_yield(curve["daily_capacity"], curve["caught_score"], n_days)
-        min_per_100 = st.slider(
-            "Keep adding reviews while each extra 100 reviews still finds at least this many laundering accounts",
-            1, 40, 10,
-            help="A compliance manager's rule: what hit rate makes an extra review worth the investigator's time?")
-        by_rule = bd.threshold_capacity(curve["daily_capacity"], curve["caught_score"], n_days, min_per_100)
-        k_row = curve[curve["daily_capacity"] == knee].iloc[0]
-        r_row = curve[curve["daily_capacity"] == by_rule].iloc[0]
-        c1, c2 = st.columns(2)
-        c1.metric("Knee of the curve", f"{knee:,} per day",
-                  f"catches {k_row['Our risk score']:.1f}% of laundering, precision {k_row['precision_score']:.1f}%",
-                  delta_color="off",
-                  help="Kneedle method: the point furthest above the straight line from the first to the last "
-                       "capacity. After it, each extra review adds noticeably less.")
-        c2.metric(f"By your rule ({min_per_100} per 100 extra)", f"{by_rule:,} per day",
-                  f"catches {r_row['Our risk score']:.1f}% of laundering, precision {r_row['precision_score']:.1f}%",
-                  delta_color="off")
-        marg = marg.dropna()
-        bars = alt.Chart(marg).mark_bar().encode(
-            x=alt.X("daily_capacity:Q", title="Accounts reviewed per day (top N)"),
-            y=alt.Y("found_per_100_extra:Q", title="Laundering found per 100 extra reviews"),
-            color=alt.condition(alt.datum.found_per_100_extra >= min_per_100, alt.value(theme.S_PURPLE),
-                                alt.value(theme.FAINT)),
-            tooltip=["daily_capacity", alt.Tooltip("found_per_100_extra:Q", format=".1f")])
-        thr = alt.Chart(pd.DataFrame({"y": [min_per_100]})).mark_rule(strokeDash=[4, 4]).encode(y="y:Q")
-        knee_rule = alt.Chart(pd.DataFrame({"x": [knee]})).mark_rule(color=theme.S_RED).encode(x="x:Q")
-        st.altair_chart(bars + thr + knee_rule, width="stretch")
-        st.caption("Each bar is the extra laundering found by reviewing 50 more accounts a day, scaled per 100 "
-                   "reviews. Grey bars fall below your rule. Red line = knee of the detection curve.")
+        with cr:
+            theme.section("Recommended daily alert limit", "where extra reviews stop paying off", "flag", theme.ORANGE)
+            knee = bd.knee_capacity(curve["daily_capacity"], curve["caught_score"])
+            marg = bd.marginal_yield(curve["daily_capacity"], curve["caught_score"], n_days)
+            min_per_100 = st.slider(
+                "Keep adding reviews while each extra 100 reviews still finds at least this many laundering accounts",
+                1, 40, 10,
+                help="A compliance manager's rule: what hit rate makes an extra review worth the investigator's time?")
+            by_rule = bd.threshold_capacity(curve["daily_capacity"], curve["caught_score"], n_days, min_per_100)
+            k_row = curve[curve["daily_capacity"] == knee].iloc[0]
+            r_row = curve[curve["daily_capacity"] == by_rule].iloc[0]
+            c1, c2 = st.columns(2)
+            c1.metric("Knee of the curve", f"{knee:,} per day",
+                      f"catches {k_row['Our risk score']:.1f}% of laundering, precision {k_row['precision_score']:.1f}%",
+                      delta_color="off",
+                      help="Kneedle method: the point furthest above the straight line from the first to the last "
+                           "capacity. After it, each extra review adds noticeably less.")
+            c2.metric(f"By your rule ({min_per_100} per 100 extra)", f"{by_rule:,} per day",
+                      f"catches {r_row['Our risk score']:.1f}% of laundering, precision {r_row['precision_score']:.1f}%",
+                      delta_color="off")
+            marg = marg.dropna()
+            bars = alt.Chart(marg).mark_bar().encode(
+                x=alt.X("daily_capacity:Q", title="Accounts reviewed per day (top N)"),
+                y=alt.Y("found_per_100_extra:Q", title="Laundering found per 100 extra reviews"),
+                color=alt.condition(alt.datum.found_per_100_extra >= min_per_100, alt.value(theme.S_PURPLE),
+                                    alt.value(theme.FAINT)),
+                tooltip=["daily_capacity", alt.Tooltip("found_per_100_extra:Q", format=".1f")])
+            thr = alt.Chart(pd.DataFrame({"y": [min_per_100]})).mark_rule(strokeDash=[4, 4]).encode(y="y:Q")
+            knee_rule = alt.Chart(pd.DataFrame({"x": [knee]})).mark_rule(color=theme.S_RED).encode(x="x:Q")
+            st.altair_chart((bars + thr + knee_rule).properties(height=theme.CHART_H - 60), width="stretch")
+            st.caption("Each bar is the extra laundering found by reviewing 50 more accounts a day, scaled per 100 "
+                       "reviews. Grey bars fall below your rule. Red line = knee of the detection curve.")
 
         with st.expander("Stored results from the scoring job (capacity_summary)"):
             st.dataframe(run_query("capacity_summary"),
@@ -249,7 +260,8 @@ with tab_ind:
                   delta_color="off")
 
         res["effect"] = res["lost_when_removed"].map(lambda v: "Helps" if v > 0 else ("Hurts" if v < 0 else "No effect"))
-        st.altair_chart(
+        il, ir = st.columns([1, 1.2], gap="medium")
+        il.altair_chart(
             alt.Chart(res).mark_bar().encode(
                 x=alt.X("lost_when_removed:Q", title="Laundering catches lost when this behaviour is removed"),
                 y=alt.Y("behaviour:N", sort="-x", title=None),
@@ -257,9 +269,9 @@ with tab_ind:
                                 scale=alt.Scale(domain=["Helps", "No effect", "Hurts"],
                                                 range=[theme.S_PURPLE, theme.FAINT, theme.S_RED])),
                 tooltip=["behaviour", "weight", "caught_without", "lost_when_removed",
-                         alt.Tooltip("change_pct:Q", format=".1f")]),
+                         alt.Tooltip("change_pct:Q", format=".1f")]).properties(height=theme.CHART_H - 40),
             width="stretch")
-        st.dataframe(
+        ir.dataframe(
             res[["behaviour", "weight", "caught_without", "lost_when_removed", "change_pct", "caught_alone"]],
             width="stretch", hide_index=True,
             column_config={
@@ -282,20 +294,22 @@ with tab_dist:
     dist["share"] = 100 * dist["accounts"] / dist.groupby("group")["accounts"].transform("sum")
     cutoff = float(queue["risk_score"].min()) if len(queue) else None
 
-    mode = st.radio("Y axis", ["Share within each group", "Account count (log scale)"], horizontal=True)
+    dl, dr = st.columns([1.4, 1], gap="medium")
+    mode = dr.radio("Y axis", ["Share within each group", "Account count (log scale)"], horizontal=True)
     y = (alt.Y("share:Q", title="% of accounts in group", stack=None) if mode.startswith("Share")
          else alt.Y("accounts:Q", title="Accounts", scale=alt.Scale(type="log"), stack=None))
     dist["bin_end"] = dist["score_bin"] + 2.5
     bars = alt.Chart(dist).mark_bar(opacity=0.55).encode(
         x=alt.X("score_bin:Q", title="Risk score", scale=alt.Scale(domain=[0, 100])), x2="bin_end:Q",
         y=y,
-        color=alt.Color("group:N", title=None, legend=alt.Legend(orient="bottom")),
+        color=alt.Color("group:N", title=None, legend=alt.Legend(orient="bottom"),
+                        scale=alt.Scale(domain=["Laundering", "Normal"], range=[theme.LAUNDERING, theme.NORMAL])),
         tooltip=["group", "score_bin", "accounts", alt.Tooltip("share:Q", format=".2f")])
     chart = bars
     if cutoff is not None:
         chart = bars + alt.Chart(pd.DataFrame({"x": [cutoff]})).mark_rule(strokeDash=[4, 4]).encode(x="x:Q")
-    st.altair_chart(chart, width="stretch")
-    st.caption(f"{day}. Dashed line = lowest score that still makes the top {capacity} queue. "
+    dl.altair_chart(chart.properties(height=theme.CHART_H), width="stretch")
+    dr.caption(f"{day}. Dashed line = lowest score that still makes the top {capacity} queue. "
                "A good score pushes laundering accounts to the right of normal ones.")
 
 # ---------------------------------------------------------------- 5. drill-down
@@ -333,7 +347,7 @@ with tab_drill:
                                     "max_points": [BEHAVIOURS[c][1] for c in POINT_COLS]})
                 base = alt.Chart(pts).encode(y=alt.Y("behaviour:N", sort=None, title=None))
                 st.altair_chart(
-                    base.mark_bar(color=theme.TINT_PURPLE).encode(x=alt.X("max_points:Q", title="Points (grey = weight)"))
+                    base.mark_bar(color=theme.LINE).encode(x=alt.X("max_points:Q", title="Points (grey = weight)"))
                     + base.mark_bar().encode(x="points:Q", tooltip=["behaviour", "points", "max_points"]),
                     width="stretch")
             with right:

@@ -31,7 +31,7 @@ DATA_DIR = Path(os.environ.get("BQ1_DATA_DIR", Path(__file__).resolve().parents[
 # and colour-blind separation), plus neutral inks for text, tracks and grid.
 # Colours come from the shared design system (common/theme.py).
 SERIES = theme.S_PURPLE   # every ordinary mark
-ACCENT = theme.INK        # the selected account / recommended capacity
+ACCENT = theme.TEAL       # the selected account / recommended capacity (the page text calls it teal)
 TRACK = theme.TINT_PURPLE # "maximum possible" bars
 INK = theme.INK
 MUTED = theme.MUTED
@@ -98,14 +98,14 @@ def full_width(fn, *args, **kwargs):
 
 
 def show(fig: go.Figure) -> None:
-    full_width(st.plotly_chart, fig, config=PLOT_CONFIG)
+    full_width(theme.plotly_chart, fig, config=PLOT_CONFIG)
 
 
 def style(fig: go.Figure, title: str, height: int = 360) -> go.Figure:
     fig.update_layout(
         title={"text": title, "x": 0, "xanchor": "left", "font": {"size": 15, "color": INK}},
-        template="plotly_white+snow",
-        height=height,
+        template="plotly_white+revo",
+        height=min(height, theme.CHART_H + 20),  # charts stay within about a quarter of the screen
         margin={"l": 10, "r": 20, "t": 50, "b": 10},
         font={"color": MUTED, "size": 12, "family": theme.FONT},
         paper_bgcolor="rgba(0,0,0,0)",
@@ -310,7 +310,7 @@ def render_queue_tab() -> None:
          ("Labelled laundering account-days" if show_ground_truth else "Total USD moved by these accounts")),
     ]
     for col, (label, value, help_txt) in zip(cols, tiles):
-        with col.container(border=True):
+        with col:
             st.metric(label, value)
             st.caption(help_txt)
 
@@ -442,7 +442,13 @@ def render_queue_tab() -> None:
     fig.update_layout(barmode="overlay")
     fig.update_xaxes(range=[0, 30], title="Average points across the accounts shown")
     fig.update_yaxes(autorange="reversed", title=None, gridcolor="rgba(0,0,0,0)")
-    show(fig)
+    drv_left, drv_right = st.columns([1.3, 1], gap="medium")
+    with drv_left:
+        show(fig)
+    drv_right.markdown(
+        '<div class="why">Each bar is the average number of points a behaviour adds to the risk score of the '
+        'accounts shown; the light track behind it is that behaviour\'s maximum. The longer the bar, the more that '
+        'behaviour is driving today\'s queue.</div>', unsafe_allow_html=True)
 
     # Main table
     st.markdown("#### Investigator queue")
@@ -526,7 +532,7 @@ with tab_capacity:
         ("Detection rate", f"{rec['overall_detection_rate']:.2%}", "Share of all laundering found"),
     ]
     for col, (label, value, help_txt) in zip(cols, tiles):
-        with col.container(border=True):
+        with col:
             st.metric(label, value)
             st.caption(help_txt)
 

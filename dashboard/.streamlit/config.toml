@@ -1,17 +1,23 @@
-# Base colours mirror common/theme.py (SnowUI dashboard design system). Change both together.
+# Base colours mirror common/theme.py (Revolut-style design system). Change both together.
 [theme]
 base = "light"
-primaryColor = "#1C1C1C"
-backgroundColor = "#F7F9FB"
-secondaryBackgroundColor = "#EEF1F5"
-textColor = "#1C1C1C"
-linkColor = "#1C1C1C"
-borderColor = "#E5E7EB"
+primaryColor = "#0666EB"
+backgroundColor = "#FFFFFF"   # cards, tables, dialogs; the grey page canvas is set in theme.py CSS
+secondaryBackgroundColor = "#EAECEF"
+textColor = "#191C1F"
+linkColor = "#0666EB"
+borderColor = "#DCE0E5"
 baseRadius = "12px"
+buttonRadius = "999px"
 showWidgetBorder = true
+dataframeHeaderBackgroundColor = "#E4EAF3"
+dataframeHeaderTextColor = "#191C1F"
+dataframeBorderColor = "#D5DBE3"
+chartCategoricalColors = ["#0666EB", "#8B5CF6", "#E8457C", "#FF7A00", "#0E9FB3", "#00A36C", "#F2B200", "#494FDF"]
 
 [client]
 toolbarMode = "minimal"
+showSidebarNavigation = false
 
 [browser]
 gatherUsageStats = false

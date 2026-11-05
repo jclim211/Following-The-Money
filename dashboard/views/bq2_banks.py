@@ -31,42 +31,63 @@ else:
     d = ui.head(bee[bee[eligible] & (bee[expected] >= 1)].sort_values(ratio, ascending=False), n)
     field, x_title = ratio, "Actual / expected schemes"
 
+eligible_set = bee[bee[eligible] & (bee[expected] >= 1)]
+if len(eligible_set):
+    o = eligible_set.sort_values(ratio, ascending=False).iloc[0]
+    theme.takeaway(f"{o['bank_name']} ({o['country']}) gets {o[ratio]:.1f}x the {side.lower()} schemes its size "
+                   f"predicts",
+                   f"{int(o[actual])} schemes {'enter' if side == 'Entry' else 'leave'} there against "
+                   f"{o[expected]:.1f} expected. Among banks with 5+ schemes, no bank is further above its share.",
+                   "login" if side == "Entry" else "logout", theme.ENTRY if side == "Entry" else theme.EXIT)
+
 theme.kpi_row([
-    (f"Banks used as {side.lower()} point", f"{int((bee[actual] > 0).sum()):,}"),
-    ("With 5+ schemes and expected 1+", f"{int((bee[eligible] & (bee[expected] >= 1)).sum()):,}"),
+    (f"Banks used as {side.lower()} point", f"{int((bee[actual] > 0).sum()):,}", "", "account_balance", theme.BLUE),
+    ("With 5+ schemes and expected 1+", f"{int(len(eligible_set)):,}", "ranked in the ratio view", "filter_alt",
+     theme.PURPLE),
     (f"All {side.lower()} points (scheme x bank)", f"{int(bee[actual].sum()):,}",
-     "a scheme with several entry (exit) banks counts once for each"),
+     "a scheme with several entry (exit) banks counts once for each", "functions", theme.ORANGE),
 ])
 
-with st.container(border=True):
-    st.markdown(f"#### {'Top' if n else 'All'} {len(d)} {side.lower()} banks · {view.lower()}")
-    dd = d.iloc[::-1]
-    fig = go.Figure(go.Bar(
-        x=dd[field], y=dd["bank"] + "  ·  " + dd["country"].astype(str), orientation="h",
-        marker=dict(color=theme.ENTRY if side == "Entry" else theme.EXIT, cornerradius=4),
-        customdata=[[int(b)] for b in dd["bank_id"]],
-        hovertemplate="<b>%{y}</b><br>" + x_title + ": %{x:,.1f}<br><i>Click to open</i><extra></extra>"))
-    fig.update_layout(height=max(220, 34 * len(d) + 60), xaxis_title=x_title, margin=dict(l=8, r=8, t=8, b=8))
-    st.plotly_chart(fig, key="bank_rank", on_select=partial(bq2.pick_bank_from_chart, "bank_rank"),
-                    selection_mode="points", width="stretch", config={"displayModeBar": False})
-    ids = d["bank_id"].astype(int).tolist()
-    tkey = f"bank_tbl_{side}_{view}_{n}"
-    st.dataframe(
-        d[["bank", "country", actual, expected, ratio]], width="stretch", hide_index=True, key=tkey,
-        on_select=partial(bq2.pick_from_table, tkey, ids, "bank"), selection_mode="single-row",
-        column_config={
-            "bank": "Bank (id)", "country": "Country", actual: "Actual schemes",
-            expected: st.column_config.NumberColumn("Expected for its size", format="%.2f"),
-            ratio: st.column_config.NumberColumn("Actual / expected", format="%.1f"),
-        })
-    st.caption(f"Click a bar or a row to open the bank. Entry banks hold an account that only sends inside a "
-               f"scheme; exit banks hold an account that only receives (cycles fall back to first sender / last "
-               f"receiver). Expected = all {side.lower()} points ({int(bee[actual].sum()):,}) x the bank's share of "
-               "all sent (entry) or received (exit) clean transactions. A ratio of 5 means five times more "
-               "schemes than its size predicts.")
+color = theme.ENTRY if side == "Entry" else theme.EXIT
+with theme.card("card_bank_rank"):
+    theme.section(f"{'Top' if n else 'All'} {len(d)} {side.lower()} banks · {view.lower()}",
+                  "Click a bar or a row to open the bank", "leaderboard", color)
+    left, right = st.columns([1, 1.45], gap="medium")
+    with left:
+        dd = d.iloc[::-1]
+        fig = go.Figure(go.Bar(
+            x=dd[field], y=dd["bank"].str.slice(0, 30), orientation="h",
+            marker=dict(color=color, cornerradius=5),
+            text=[f"{v:,.1f}x" if field == ratio else f"{v:,.0f}" for v in dd[field]], textposition="outside",
+            cliponaxis=False, customdata=[[int(b)] for b in dd["bank_id"]],
+            hovertemplate="<b>%{y}</b><br>" + x_title + ": %{x:,.1f}<br><i>Click to open</i><extra></extra>"))
+        fig.update_layout(height=min(theme.CHART_H + 60, max(200, 30 * len(d) + 50)), xaxis_title=x_title,
+                          margin=dict(l=8, r=40, t=8, b=8))
+        theme.plotly_chart(fig, key="bank_rank", on_select=partial(bq2.pick_bank_from_chart, "bank_rank"),
+                        selection_mode="points", width="stretch", config={"displayModeBar": False})
+    with right:
+        ids = d["bank_id"].astype(int).tolist()
+        tkey = f"bank_tbl_{side}_{view}_{n}"
+        st.dataframe(
+            d[["bank", "country", actual, expected, ratio]], width="stretch", hide_index=True, key=tkey,
+            on_select=partial(bq2.pick_from_table, tkey, ids, "bank"), selection_mode="single-row",
+            height=min(theme.CHART_H + 60, 38 + 35 * max(len(d), 1)),
+            column_config={
+                "bank": st.column_config.TextColumn("Bank (id)", width="medium"),
+                "country": st.column_config.TextColumn("Country", width="small"),
+                actual: st.column_config.ProgressColumn("Actual", format="%d", min_value=0, width="small",
+                                                        max_value=int(max(bee[actual].max(), 1))),
+                expected: st.column_config.NumberColumn("Expected", format="%.1f", width="small",
+                                                        help="Schemes expected from the bank's share of activity"),
+                ratio: st.column_config.NumberColumn("Actual / expected", format="%.1fx", width="small"),
+            })
+    st.caption(f"Entry banks hold an account that only sends inside a scheme; exit banks hold an account that only "
+               f"receives (cycles fall back to first sender / last receiver). Expected = all {side.lower()} points "
+               f"({int(bee[actual].sum()):,}) x the bank's share of all sent (entry) or received (exit) clean "
+               "transactions. A ratio of 5 means five times more schemes than its size predicts.")
 
-with st.container(border=True):
-    st.markdown("#### Banks used as both entry and exit (5+ each)")
+with theme.card("card_bank_both"):
+    theme.section("Banks used as both entry and exit", "5+ schemes on each side", "sync_alt", theme.ORANGE)
     both = bee[bee["entry_eligible"] & bee["exit_eligible"]].assign(total=lambda x: x["entries"] + x["exits"])
     both = ui.head(both.sort_values("total", ascending=False), n)
     bids = both["bank_id"].astype(int).tolist()
@@ -76,13 +97,17 @@ with st.container(border=True):
         width="stretch", hide_index=True, key=bkey,
         on_select=partial(bq2.pick_from_table, bkey, bids, "bank"), selection_mode="single-row",
         column_config={
-            "bank": "Bank (id)", "country": "Country", "entries": "Entries", "exits": "Exits",
-            "entry_ratio": st.column_config.NumberColumn("Entry ratio", format="%.1f"),
-            "exit_ratio": st.column_config.NumberColumn("Exit ratio", format="%.1f"),
+            "bank": "Bank (id)", "country": "Country",
+            "entries": st.column_config.ProgressColumn("Entries", format="%d", min_value=0,
+                                                       max_value=int(max(bee["entries"].max(), 1))),
+            "exits": st.column_config.ProgressColumn("Exits", format="%d", min_value=0,
+                                                     max_value=int(max(bee["exits"].max(), 1))),
+            "entry_ratio": st.column_config.NumberColumn("Entry ratio", format="%.1fx"),
+            "exit_ratio": st.column_config.NumberColumn("Exit ratio", format="%.1fx"),
         })
 
 # ---------------------------------------------------------------- network map (on request)
-with st.expander("Bank network map: which banks the schemes run through"):
+with st.expander("Bank network map: which banks the schemes run through", icon=":material/hub:"):
     prof, edges_all = bq2.profile(), bq2.edges()
     m1, m2 = st.columns(2)
     stype = m1.selectbox("Scheme type", ["All types"] + sorted(prof["scheme_type"].unique()), key="map_type")
@@ -139,9 +164,9 @@ with st.expander("Bank network map: which banks the schemes run through"):
             hoverinfo="text",
             marker=dict(size=[8 + 3 * v ** 0.5 for v in dm["n_schemes"]], color=color,
                         line=dict(width=1, color=theme.SURFACE))))
-    fig.update_layout(height=560, margin=dict(l=0, r=0, t=10, b=0), dragmode="pan",
+    fig.update_layout(height=420, margin=dict(l=0, r=0, t=10, b=0), dragmode="pan",
                       xaxis=dict(visible=False), yaxis=dict(visible=False), hovermode="closest")
-    st.plotly_chart(fig, key="bankmap", on_select=partial(bq2.pick_bank_from_chart, "bankmap"),
+    theme.plotly_chart(fig, key="bankmap", on_select=partial(bq2.pick_bank_from_chart, "bankmap"),
                     selection_mode="points", width="stretch", config={"scrollZoom": True})
     st.caption("Click a bank to open it. Node size = schemes through the bank. 'Mostly' means at least twice "
                "as many entries as exits (or the reverse). Scroll to zoom, drag to pan.")

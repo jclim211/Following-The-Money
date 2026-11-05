@@ -1,46 +1,120 @@
-"""Shared page furniture: the header bar with the run menu, and the top-N selector."""
+"""Shared page furniture: the run bar at the top, the two-level menu, "up next", and the top-N selector."""
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import streamlit as st
 
 from common import theme
 from common.runs import RUN_KEY, registry
 
-STATUS_COLORS = {"succeeded": theme.S_GREEN, "running": theme.S_BLUE, "failed": theme.S_RED}
+STATUS_COLORS = {"succeeded": theme.GREEN, "running": theme.BLUE, "failed": theme.RED}
 
 
-def header_bar():
-    """Brand on the left, run menu on the right. Returns the selected Run (or None)."""
+@dataclass
+class Section:
+    title: str
+    short: str
+    icon: str
+    pages: list            # st.Page objects, in menu order
+
+
+# ---------------------------------------------------------------- run bar
+def top_bar(manage_page=None):
+    """Dark bar at the very top: brand, the dataset-run menu, its status. Returns the selected Run (or None)."""
     runs = registry().list_runs()
     ids = [r.run_id for r in runs]
     if ids and st.session_state.get(RUN_KEY) not in ids:
         st.session_state[RUN_KEY] = ids[0]
-
-    left, mid, right = st.columns([3, 2, 2], vertical_alignment="center")
-    with left:
-        st.markdown('<div class="snow-brand"><div class="logo">FM</div><div>'
-                    '<div class="name">Following the Money</div>'
-                    '<div class="sub">IS459 Group 7 · AML analytics</div></div></div>',
-                    unsafe_allow_html=True)
-    if not runs:
-        right.warning("No runs registered.")
-        st.divider()
-        return None
     by_id = {r.run_id: r for r in runs}
-    with mid:
-        st.selectbox("Dataset run", ids, key=RUN_KEY, label_visibility="collapsed",
-                     format_func=lambda i: f"Run {ids.index(i) + 1} · {by_id[i].name}",
-                     help="Each run is the whole pipeline (BQ1 + BQ2) on one dataset. "
-                          "Every page shows the run picked here.")
-    run = by_id[st.session_state[RUN_KEY]]
-    with right:
-        st.markdown(f'<div class="snow-runmeta">'
-                    f'{theme.pill(run.status, STATUS_COLORS.get(run.status, theme.S_GREY))}'
-                    f'&nbsp; {theme.esc(run.period or "created " + run.created_at)}</div>',
-                    unsafe_allow_html=True)
-    st.markdown(f'<hr style="margin:10px 0 18px 0;border:none;border-top:1px solid {theme.LINE}">',
-                unsafe_allow_html=True)
+
+    with st.container(key="topbar"):
+        c_brand, c_run, c_meta, c_manage = st.columns([2.9, 3.4, 2.7, 1.5], vertical_alignment="center")
+        c_brand.markdown(f'<div class="rv-brand"><div class="logo">{theme.icon("currency_exchange", "#FFFFFF", 24)}</div>'
+                         '<div><div class="name">Following the Money</div>'
+                         '<div class="sub">IS459 Group 7 · anti-money-laundering analytics</div></div></div>',
+                         unsafe_allow_html=True)
+        if not runs:
+            c_run.markdown('<div class="rv-runmeta">No dataset runs registered</div>', unsafe_allow_html=True)
+            return None
+        with c_run:
+            st.selectbox("Dataset run", ids, key=RUN_KEY, label_visibility="collapsed",
+                         format_func=lambda i: f"Run {ids.index(i) + 1} · {by_id[i].name}",
+                         help="Each run is the whole pipeline (BQ1 + BQ2) on one dataset. "
+                              "Every page shows the run picked here.")
+        run = by_id[st.session_state[RUN_KEY]]
+        c_meta.markdown(f'<div class="rv-runmeta">{theme.pill(run.status, STATUS_COLORS.get(run.status, theme.GREY))}'
+                        f'<div class="per"><div class="l">Data period</div>'
+                        f'<div class="v">{theme.esc(run.period or run.created_at)}</div></div></div>',
+                        unsafe_allow_html=True)
+        if manage_page is not None:
+            c_manage.page_link(manage_page, label="Manage runs", icon=":material/tune:")
     return run
+
+
+# ---------------------------------------------------------------- menu
+def _flat(sections):
+    return [(s, p) for s in sections for p in s.pages]
+
+
+def menu(sections: list[Section], current) -> None:
+    """Big section tabs, then the current section's pages, where you are, and the next page to visit."""
+    cur_sec = next((s for s in sections if any(p.title == current.title for p in s.pages)), sections[0])
+
+    with st.container(key="mainnav"):
+        cols = st.columns([len(s.title) + 10 for s in sections])   # wider tabs for longer names
+        for i, (col, sec) in enumerate(zip(cols, sections)):
+            on = sec is cur_sec
+            with col.container(key=f"navon_{i}" if on else f"nav_{i}"):
+                st.page_link(sec.pages[0], label=sec.title, icon=sec.icon)
+
+    flat = _flat(sections)
+    idx = next(i for i, (_, p) in enumerate(flat) if p.title == current.title)
+    nxt = flat[idx + 1] if idx + 1 < len(flat) else None
+    next_label = ""
+    if nxt is not None:   # name the section too when "next" leaves the current one
+        next_label = f"Next: {nxt[1].title}" if nxt[0] is cur_sec else f"Next: {nxt[0].short} · {nxt[1].title}"
+
+    with st.container(key="subnav"):
+        n = len(cur_sec.pages)
+        next_w = len(next_label) + 9 if nxt is not None else 1
+        if n > 1:   # width follows the label length so nothing is cut off
+            page_w = [len(p.title) + 9 for p in cur_sec.pages]
+            widths = page_w + [max(1, 125 - sum(page_w) - next_w), next_w]
+        else:
+            widths = [60, max(1, 125 - 60 - next_w), next_w]
+        cols = st.columns(widths, vertical_alignment="center")
+        if n > 1:
+            for i, p in enumerate(cur_sec.pages):
+                with cols[i].container(key=f"subon_{i}" if p.title == current.title else f"sub_{i}"):
+                    st.page_link(p, label=p.title, icon=p.icon)
+        else:
+            crumb = (f'<b>{theme.esc(current.title)}</b> · start here, then follow "Next"' if current.title == cur_sec.short
+                     else f'{theme.esc(cur_sec.short)} › <b>{theme.esc(current.title)}</b>')
+            cols[0].markdown(f'<div class="rv-crumb">{crumb}</div>', unsafe_allow_html=True)
+        if nxt is not None:
+            with cols[-1].container(key="subnext"):
+                st.page_link(nxt[1], label=next_label, icon=":material/arrow_forward:")
+
+
+def up_next(sections: list[Section], current) -> None:
+    """Card at the bottom of each page pointing to the next page."""
+    flat = _flat(sections)
+    idx = next((i for i, (_, p) in enumerate(flat) if p.title == current.title), None)
+    if idx is None:
+        return
+    if idx + 1 < len(flat):
+        sec, page = flat[idx + 1]
+        label = f"{sec.short} · {page.title}"
+    else:
+        sec, page = flat[0]
+        label = "Back to the overview"
+    with st.container(key="upnext"):
+        c1, c2 = st.columns([5, 2], vertical_alignment="center")
+        c1.markdown(f'<div class="rv-h">{theme.chip("east", theme.BLUE, 36)}<div><div class="c">Up next</div>'
+                    f'<div class="t">{theme.esc(label)}</div></div></div>', unsafe_allow_html=True)
+        with c2:
+            st.page_link(page, label="Continue", icon=":material/arrow_forward:")
 
 
 # ---------------------------------------------------------------- top N
