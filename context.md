@@ -13,10 +13,9 @@ context.md              this file
 dashboard/              ONE Streamlit app for both BQs (deployed to EC2)
   Home.py               landing page
   common/athena.py      shared run_query(sql, database) with caching. Use this, do not write your own boto3 code.
-  pages/1_BQ1_Account_Risk.py          BQ1 live from Athena: queue, capacity curve vs baseline, score distribution, drill-down
+  pages/1_BQ1_Account_Profiles.py      BQ1 Account Profiles: daily queue, capacity trade-off, methodology (bq1_data.py, data_bq1/)
   pages/2_BQ2_Cross_bank_movement.py   BQ2 live from Athena (aml_bq2_curated): flows, holding time, schemes, banks, network
-  pages/3_BQ1_Pilot_Queue.py           BQ1 pilot view from CSV exports in data_bq1/ (uses bq1_data.py)
-  bq1_data.py, data_bq1/               helpers and CSV exports for page 3
+  bq1_data.py, data_bq1/               helpers and CSV exports for the BQ1 page
   requirements.txt      add any new Python package here (server installs it on deploy)
   run_dashboard.bat     run locally on Windows
 pipeline/               Spark jobs that run on EMR Serverless (copies of s3://is459-g7-projectbucket/scripts/)
@@ -79,7 +78,7 @@ Mac: same steps with `python3 -m venv ~/.venvs/is459-bq1` and `~/.venvs/is459-bq
 
 ## Add or change a page
 
-1. Use the shared helper (as `pages/1_BQ1_Account_Risk.py` does):
+1. Use the shared helper (as `pages/2_BQ2_Cross_bank_movement.py` does):
    ```python
    from common.athena import run_query
    df = run_query("SELECT ... FROM schemes", database="aml_clean")

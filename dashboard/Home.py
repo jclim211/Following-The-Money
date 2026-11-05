@@ -10,7 +10,7 @@ with c1:
     st.subheader("BQ1: Account risk prioritisation")
     st.write("Which accounts should investigators review first under limited daily capacity, "
              "and which behaviours matter most?")
-    st.page_link("pages/1_BQ1_Account_Risk.py", label="Open BQ1 dashboard", icon=":material/bar_chart:")
+    st.page_link("pages/1_BQ1_Account_Profiles.py", label="Open BQ1 dashboard", icon=":material/bar_chart:")
 with c2:
     st.subheader("BQ2: Laundering networks")
     st.write("How do laundering networks move funds differently from normal transactions, "

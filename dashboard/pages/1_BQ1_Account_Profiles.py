@@ -7,7 +7,7 @@ the CSV exports in dashboard/data_bq1/ (set BQ1_DATA_SOURCE=csv to force that). 
   2. the capacity trade-off behind the 100-reviews-per-day pilot;
   3. methodology, limitations and data checks.
 
-Page 3 of the shared dashboard (dashboard/Home.py). Data: dashboard/data_bq1/.
+BQ1 Account Profiles page of the shared dashboard (was 3_BQ1_Pilot_Queue.py) (dashboard/Home.py). Data: dashboard/data_bq1/.
 Merged from BQ1_Streamlit_Dashboard_Merged_v2 (v2.1, see BQ1_PILOT_CHANGELOG.md).
 """
 from __future__ import annotations
@@ -67,7 +67,7 @@ def flag_url(country):
     iso = COUNTRY_ISO.get(country)
     return f"https://flagcdn.com/40x30/{iso}.png" if iso else UNKNOWN_BADGE
 
-st.set_page_config(page_title="BQ1 AML Investigator Queue", page_icon="🏦", layout="wide")
+st.set_page_config(page_title="BQ1 Account Profiles", page_icon="🏦", layout="wide")
 
 st.markdown(
     """
