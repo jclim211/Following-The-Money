@@ -26,7 +26,9 @@ REGION = os.getenv("BQ1_REGION", "us-east-1")
 PROFILE = os.getenv("BQ1_AWS_PROFILE", "is459")
 DATABASE = "aml_bq2_curated"
 WORKGROUP = "primary"
-ATHENA_OUTPUT = "s3://is459-g7-projectbucket/athena-results/streamlit/"
+BUCKET = "is459-g7-projectbucket"
+QUERY_PREFIX = "scripts/queries/bq2/dashboard"
+ATHENA_OUTPUT = f"s3://{BUCKET}/athena-results/bq2/dashboard"
 
 GROUP_COLORS = alt.Scale(domain=["laundering", "normal"], range=["#d62728", "#9ca3af"])
 DIMENSION_LABELS = {"payment_format": "Payment format", "conversion": "Currency conversion",
@@ -81,49 +83,50 @@ def describe_type(t: str, prof: pd.DataFrame) -> str:
             f"{d['duration_hours'].median():.0f} h, median ${d['total_usd'].median():,.0f}.")
 
 
-# ---------------------------------------------------------------- Athena helper (same as app.py)
+# ---------------------------------------------------------------- Athena + S3 helper
+# Flow: SQL file in S3 -> Athena runs it and writes a CSV to S3 -> Streamlit reads that CSV from S3.
 @st.cache_resource
-def athena_client():
+def aws_session():
     try:
-        session = boto3.Session(profile_name=PROFILE, region_name=REGION) if PROFILE else boto3.Session(region_name=REGION)
+        return boto3.Session(profile_name=PROFILE, region_name=REGION) if PROFILE else boto3.Session(region_name=REGION)
     except ProfileNotFound:
-        session = boto3.Session(region_name=REGION)
-    return session.client("athena")
+        return boto3.Session(region_name=REGION)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_sql(name: str) -> str:
+    """Read a stored query from S3."""
+    obj = aws_session().client("s3").get_object(Bucket=BUCKET, Key=f"{QUERY_PREFIX}/{name}.sql")
+    return obj["Body"].read().decode("utf-8")
 
 
 @st.cache_data(ttl=3600, show_spinner="Querying Athena...")
-def run_query(sql: str) -> pd.DataFrame:
-    """Run a read-only query and return the result. Athena reuses results for 60 min to save cost."""
-    athena = athena_client()
+def run_query(name: str) -> pd.DataFrame:
+    """Run a stored query and read its result CSV from S3. Athena reuses results for 60 min to save cost."""
+    session = aws_session()
+    athena = session.client("athena")
     qid = athena.start_query_execution(
-        QueryString=sql,
+        QueryString=load_sql(name),
         QueryExecutionContext={"Database": DATABASE},
         WorkGroup=WORKGROUP,
-        ResultConfiguration={"OutputLocation": ATHENA_OUTPUT},
+        ResultConfiguration={"OutputLocation": f"{ATHENA_OUTPUT}/{name}/"},
         ResultReuseConfiguration={"ResultReuseByAgeConfiguration": {"Enabled": True, "MaxAgeInMinutes": 60}},
     )["QueryExecutionId"]
 
     while True:
-        status = athena.get_query_execution(QueryExecutionId=qid)["QueryExecution"]["Status"]
+        execution = athena.get_query_execution(QueryExecutionId=qid)["QueryExecution"]
+        status = execution["Status"]
         if status["State"] in ("SUCCEEDED", "FAILED", "CANCELLED"):
             break
         time.sleep(0.5)
     if status["State"] != "SUCCEEDED":
         raise RuntimeError(status.get("StateChangeReason", status["State"]))
 
-    rows, token = [], None
-    while True:
-        kwargs = {"QueryExecutionId": qid, "MaxResults": 1000}
-        if token:
-            kwargs["NextToken"] = token
-        page = athena.get_query_results(**kwargs)
-        rows.extend(page["ResultSet"]["Rows"])
-        token = page.get("NextToken")
-        if not token:
-            break
-    header = [c.get("VarCharValue") for c in rows[0]["Data"]]
-    df = pd.DataFrame([[c.get("VarCharValue") for c in r["Data"]] for r in rows[1:]], columns=header)
-    for col in df.columns:  # Athena returns text; turn numeric columns into numbers
+    # A reused result can live in an older folder, so always use the location Athena reports.
+    bucket, key = execution["ResultConfiguration"]["OutputLocation"].removeprefix("s3://").split("/", 1)
+    body = session.client("s3").get_object(Bucket=bucket, Key=key)["Body"]
+    df = pd.read_csv(body, dtype=str, keep_default_na=False, na_values=[""])
+    for col in df.columns:  # CSV is text; turn numeric columns into numbers
         converted = pd.to_numeric(df[col], errors="coerce")
         if converted.notna().sum() == df[col].notna().sum():
             df[col] = converted
@@ -142,9 +145,9 @@ def bank_label(df: pd.DataFrame) -> pd.Series:
 # ---------------------------------------------------------------- layout
 st.set_page_config(page_title="BQ2 Cross-bank Movement", page_icon="🏦", layout="wide")
 st.title("🏦 BQ2: How do laundering networks move funds across banks?")
-flow = run_query("SELECT * FROM flow_comparison")
-profile = run_query("SELECT * FROM scheme_profile")
-st.caption(f"Live from Athena (aml_bq2_curated). Clean HI-Medium transactions 2022-09-01 to 09-16, "
+flow = run_query("flow_comparison")
+profile = run_query("scheme_profile")
+st.caption(f"Athena results read from S3 (aml_bq2_curated). Clean HI-Medium transactions 2022-09-01 to 09-16, "
            f"plus the {len(profile):,} laundering schemes reconstructed from Patterns.txt.")
 n_laundering = int(flow[(flow["grp"] == "laundering") & (flow["dimension"] == "border")]["n_tx"].sum())
 n_normal = int(flow[(flow["grp"] == "normal") & (flow["dimension"] == "border")]["n_tx"].sum())
@@ -204,7 +207,7 @@ with tab_flow:
             })
 
     st.subheader("Holding time: how long until received money is sent on")
-    hold = run_query("SELECT * FROM holding_time ORDER BY grp, bucket_order")
+    hold = run_query("holding_time")
     left, right = st.columns([2, 1])
     with left:
         st.altair_chart(
@@ -254,7 +257,7 @@ with tab_flow:
 
 # ---------------------------------------------------------------- 2. country routes
 with tab_country:
-    pairs = run_query("SELECT * FROM country_pairs")
+    pairs = run_query("country_pairs")
     pairs["n_total"] = pairs["n_laundering"] + pairs["n_normal"]
     avg_rate = pairs["n_laundering"].sum() / pairs["n_total"].sum()
     pairs["x_average"] = pairs["laundering_rate"] / avg_rate
@@ -320,7 +323,7 @@ with tab_country:
 
 # ---------------------------------------------------------------- 3. entry and exit banks
 with tab_bank:
-    bee = run_query("SELECT * FROM bank_entry_exit")
+    bee = run_query("bank_entry_exit")
     for c in ["entry_eligible", "exit_eligible"]:
         bee[c] = as_bool(bee[c])
     bee["bank"] = bank_label(bee)
@@ -388,15 +391,6 @@ ROLE_COLORS = {"mostly entry": "#16a34a", "mostly exit": "#dc2626", "entry and e
 
 # Size proxies for the banks schemes touch: clean transactions (clean/banks) and accounts (accounts.csv).
 # The dataset has no real bank size (assets, branches, customers).
-BANK_SQL = """
-    WITH sb AS (SELECT from_bank AS bank_id FROM scheme_edges UNION SELECT to_bank FROM scheme_edges),
-    acc AS (SELECT TRY_CAST("bank id" AS bigint) AS bank_num, COUNT(DISTINCT "account number") AS n_accounts
-            FROM aml_raw.raw_accounts GROUP BY 1)
-    SELECT sb.bank_id, b.bank_name, b.country, b.total_txns, a.n_accounts
-    FROM sb
-    LEFT JOIN aml_clean.banks b ON b.bank_id = sb.bank_id
-    LEFT JOIN acc a ON a.bank_num = TRY_CAST(sb.bank_id AS bigint)"""
-
 
 @st.cache_data(show_spinner=False)
 def spring_positions(nodes: tuple, edges: tuple) -> dict:
@@ -446,9 +440,9 @@ def pick_scheme_from_box():
 
 
 with tab_net:
-    edges_all = run_query("SELECT * FROM scheme_edges")
+    edges_all = run_query("scheme_edges")
     try:
-        info = run_query(BANK_SQL).set_index("bank_id")
+        info = run_query("bank_size").set_index("bank_id")
     except Exception as ex:  # keep the page usable if the size query fails
         st.warning(f"Bank size query failed, showing names from bank_entry_exit only: {ex}")
         info = bee.set_index("bank_id")[["bank_name", "country"]].assign(total_txns=None, n_accounts=None)
