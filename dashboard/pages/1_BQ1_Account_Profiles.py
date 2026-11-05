@@ -23,6 +23,7 @@ import streamlit as st
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # bq1_data.py sits in dashboard/
 import bq1_data as bd  # noqa: E402
+from common.runs import open_run  # noqa: E402
 
 DATA_DIR = Path(os.environ.get("BQ1_DATA_DIR", Path(__file__).resolve().parents[1] / "data_bq1"))
 
@@ -138,13 +139,16 @@ ID_TEXT_COLUMNS = ("profile_date", "bank_id", "account_id", "account_key", "acco
 
 
 @st.cache_data(ttl=3600, show_spinner="Loading the BQ1 queue from Athena...")
-def load_athena():
-    """Live data: the same view the CSV export was made from (pipeline/bq1/athena/prepare_dashboard.sql)."""
+def load_athena(db: str = None):
+    """Live data: the same view the CSV export was made from (pipeline/bq1/athena/prepare_dashboard.sql).
+
+    db = None reads the original HI-Medium tables; otherwise it reads that run's Glue database.
+    """
     from common.athena import run_query
-    queue = bd.prepare_queue(run_query(
-        "dashboard_queue", text_columns=ID_TEXT_COLUMNS))
-    capacity = bd.prepare_capacity(run_query("capacity_summary"))
-    return queue, capacity, bd.run_checks(queue, capacity)
+    place = {"params": {"db": db}, "database": db, "folder": "run"} if db else {}
+    queue = bd.prepare_queue(run_query("dashboard_queue", text_columns=ID_TEXT_COLUMNS, **place))
+    capacity = bd.prepare_capacity(run_query("capacity_summary", **place))
+    return queue, capacity, bd.run_checks(queue, capacity, baseline=db is None)
 
 
 @st.cache_data(show_spinner=False)
@@ -157,8 +161,18 @@ def load_csv(data_dir: str):
 # ---------------------------------------------------------------------------
 # Load data: live Athena first, CSV export as a fallback
 # ---------------------------------------------------------------------------
+RUN = open_run()
+DATASET = RUN["dataset"] if RUN else "HI-Medium"
 data_source, athena_error = "csv", None
-if os.environ.get("BQ1_DATA_SOURCE", "athena").lower() != "csv":
+if RUN:  # the CSV export is HI-Medium, so never use it for another run
+    try:
+        queue, capacity, checks = load_athena(RUN["db"])
+        data_source = "athena"
+    except Exception as err:
+        st.title("BQ1 AML Investigator Queue")
+        st.error(f"Could not load run {RUN['run']} from Athena: {str(err)[:300]}")
+        st.stop()
+elif os.environ.get("BQ1_DATA_SOURCE", "athena").lower() != "csv":
     try:
         queue, capacity, checks = load_athena()
         data_source = "athena"
@@ -255,7 +269,7 @@ with st.sidebar:
 
     st.divider()
     if data_source == "athena":
-        st.caption("Data: Athena results read from S3 (aml_curated.bq1_dashboard_queue), refreshed hourly.")
+        st.caption(f"Data: Athena results read from S3 ({RUN['db'] if RUN else 'aml_curated'}.bq1_dashboard_queue), refreshed hourly.")
     else:
         st.caption("Data: CSV export in data_bq1/"
                    + (f" (Athena unavailable: {athena_error})" if athena_error else "") + ".")
@@ -269,7 +283,7 @@ with st.sidebar:
             "Export ranks 1-1,000 to enable the 500 and 1,000 capacity options."
         )
     st.caption(
-        "Source: IBM Transactions for AML (HI-Medium, synthetic). "
+        f"Source: IBM Transactions for AML ({DATASET}, synthetic). "
         "Pipeline: S3 → Glue → EMR Serverless (Spark) → S3 Parquet → Athena → this app."
     )
 
@@ -533,7 +547,8 @@ with tab_capacity:
             st.metric(label, value)
             st.caption(help_txt)
 
-    ref = bd.random_review_reference(capacity)
+    active_rows = queue.groupby("profile_date")[bd.ACTIVE_COLUMN].first().sum() if RUN else bd.TOTAL_PROFILE_ROWS
+    ref = bd.random_review_reference(capacity, int(active_rows))
     st.info(
         f"For scale: about {ref['laundering_per_day']:,.0f} of roughly {ref['active_per_day']:,.0f} active "
         f"account-days each day are labelled laundering, so reviewing 100 accounts at random would hit "
@@ -696,7 +711,7 @@ active account per date. Every profile gets up to 100 points from seven behaviou
             """
 #### Limitations
 - **Synthetic data.** IBM's simulated transactions, not real bank records.
-- **Only 16 dates** are available, so results are an average over a short window.
+- **Only a short date range** is available, so results are an average over a short window.
 - **Weights are project assumptions**, set from exploratory lift analysis, not learned by a model.
 - **A high score is a priority to investigate, not proof** of criminal activity.
 - **100 reviews/day assumes a small pilot team.** Other capacities are in the trade-off tab.

@@ -1,0 +1,483 @@
+{
+  "Comment": "IS459 G7 pipeline: raw files -> Spark (clean, BQ1, BQ2) -> Glue crawler -> Athena setup -> run.json. Each run has its own folder and Glue database.",
+  "StartAt": "SetPaths",
+  "States": {
+    "SetPaths": {
+      "Type": "Pass",
+      "Comment": "Input: run, db, dataset",
+      "Parameters": {
+        "raw.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/raw', $.run)",
+        "clean.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/clean', $.run)",
+        "curated.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated', $.run)",
+        "metrics.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/metrics', $.run)",
+        "lookup.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/account_country_lookup/', $.run)"
+      },
+      "ResultPath": "$.paths",
+      "Next": "CreateDatabase"
+    },
+    "CreateDatabase": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:createDatabase",
+      "Parameters": {
+        "DatabaseInput": {
+          "Name.$": "$.db"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Glue.AlreadyExistsException"
+          ],
+          "ResultPath": null,
+          "Next": "SkipSpark?"
+        },
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "SkipSpark?"
+    },
+    "SkipSpark?": {
+      "Type": "Choice",
+      "Comment": "Add \"from_crawler\": true to the input to resume a failed run without repeating Spark",
+      "Choices": [
+        {
+          "Variable": "$.from_crawler",
+          "IsPresent": true,
+          "Next": "CreateCrawler"
+        }
+      ],
+      "Default": "Clean"
+    },
+    "Clean": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::emr-serverless:startJobRun.sync",
+      "Parameters": {
+        "ApplicationId": "00g9nf6jpni06m09",
+        "ExecutionRoleArn": "arn:aws:iam::761018854594:role/is459-g7-emr-serverless-role",
+        "Name.$": "States.Format('clean-{}', $.run)",
+        "ExecutionTimeoutMinutes": 30,
+        "JobDriver": {
+          "SparkSubmit": {
+            "EntryPoint": "s3://is459-g7-projectbucket/scripts/shared/clean.py",
+            "SparkSubmitParameters": "--conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+            "EntryPointArguments.$": "States.Array('--raw', $.paths.raw, '--clean', $.paths.clean, '--metrics', States.Format('s3://is459-g7-projectbucket/runs/{}/metrics/clean', $.run), '--dataset', $.dataset)"
+          }
+        },
+        "ConfigurationOverrides": {
+          "MonitoringConfiguration": {
+            "S3MonitoringConfiguration": {
+              "LogUri": "s3://is459-g7-projectbucket/logs/EMR-Serverless"
+            }
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "RunBQ1AndBQ2",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ]
+    },
+    "RunBQ1AndBQ2": {
+      "Type": "Parallel",
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "CreateCrawler",
+      "Branches": [
+        {
+          "StartAt": "BQ1Profiles",
+          "States": {
+            "BQ1Profiles": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::emr-serverless:startJobRun.sync",
+              "Parameters": {
+                "ApplicationId": "00g9nf6jpni06m09",
+                "ExecutionRoleArn": "arn:aws:iam::761018854594:role/is459-g7-emr-serverless-role",
+                "Name.$": "States.Format('bq1-profiles-{}', $.run)",
+                "ExecutionTimeoutMinutes": 30,
+                "JobDriver": {
+                  "SparkSubmit": {
+                    "EntryPoint": "s3://is459-g7-projectbucket/scripts/bq1/account_profiles.py",
+                    "SparkSubmitParameters": "--conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                    "EntryPointArguments.$": "States.Array('--input', States.Format('s3://is459-g7-projectbucket/runs/{}/clean/transactions/', $.run), '--profiles-output', States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/account_profiles/', $.run), '--labels-output', States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/account_labels/', $.run), '--metrics-output', States.Format('s3://is459-g7-projectbucket/runs/{}/metrics/bq1/account_profiles/', $.run))"
+                  }
+                },
+                "ConfigurationOverrides": {
+                  "MonitoringConfiguration": {
+                    "S3MonitoringConfiguration": {
+                      "LogUri": "s3://is459-g7-projectbucket/logs/EMR-Serverless"
+                    }
+                  }
+                }
+              },
+              "ResultPath": null,
+              "Next": "BQ1Scoring"
+            },
+            "BQ1Scoring": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::emr-serverless:startJobRun.sync",
+              "Parameters": {
+                "ApplicationId": "00g9nf6jpni06m09",
+                "ExecutionRoleArn": "arn:aws:iam::761018854594:role/is459-g7-emr-serverless-role",
+                "Name.$": "States.Format('bq1-scoring-{}', $.run)",
+                "ExecutionTimeoutMinutes": 30,
+                "JobDriver": {
+                  "SparkSubmit": {
+                    "EntryPoint": "s3://is459-g7-projectbucket/scripts/bq1/risk_scoring.py",
+                    "SparkSubmitParameters": "--conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                    "EntryPointArguments.$": "States.Array('--profiles-input', States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/account_profiles/', $.run), '--labels-input', States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/account_labels/', $.run), '--rankings-output', States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/risk_rankings/', $.run), '--capacity-output', States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/capacity_evaluation/', $.run), '--summary-output', States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/capacity_summary/', $.run), '--metrics-output', States.Format('s3://is459-g7-projectbucket/runs/{}/metrics/bq1/risk_scoring/', $.run))"
+                  }
+                },
+                "ConfigurationOverrides": {
+                  "MonitoringConfiguration": {
+                    "S3MonitoringConfiguration": {
+                      "LogUri": "s3://is459-g7-projectbucket/logs/EMR-Serverless"
+                    }
+                  }
+                }
+              },
+              "ResultPath": null,
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "BQ2Schemes",
+          "States": {
+            "BQ2Schemes": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::emr-serverless:startJobRun.sync",
+              "Parameters": {
+                "ApplicationId": "00g9nf6jpni06m09",
+                "ExecutionRoleArn": "arn:aws:iam::761018854594:role/is459-g7-emr-serverless-role",
+                "Name.$": "States.Format('bq2-schemes-{}', $.run)",
+                "ExecutionTimeoutMinutes": 30,
+                "JobDriver": {
+                  "SparkSubmit": {
+                    "EntryPoint": "s3://is459-g7-projectbucket/scripts/bq2/schemes.py",
+                    "SparkSubmitParameters": "--conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                    "EntryPointArguments.$": "States.Array('--raw', $.paths.raw, '--clean', $.paths.clean, '--metrics', States.Format('s3://is459-g7-projectbucket/runs/{}/metrics/bq2/schemes', $.run), '--dataset', $.dataset)"
+                  }
+                },
+                "ConfigurationOverrides": {
+                  "MonitoringConfiguration": {
+                    "S3MonitoringConfiguration": {
+                      "LogUri": "s3://is459-g7-projectbucket/logs/EMR-Serverless"
+                    }
+                  }
+                }
+              },
+              "ResultPath": null,
+              "Next": "BQ2Analysis"
+            },
+            "BQ2Analysis": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::emr-serverless:startJobRun.sync",
+              "Parameters": {
+                "ApplicationId": "00g9nf6jpni06m09",
+                "ExecutionRoleArn": "arn:aws:iam::761018854594:role/is459-g7-emr-serverless-role",
+                "Name.$": "States.Format('bq2-analysis-{}', $.run)",
+                "ExecutionTimeoutMinutes": 30,
+                "JobDriver": {
+                  "SparkSubmit": {
+                    "EntryPoint": "s3://is459-g7-projectbucket/scripts/bq2/bq2_analysis_v2.py",
+                    "SparkSubmitParameters": "--conf spark.hadoop.hive.metastore.client.factory.class=com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory",
+                    "EntryPointArguments.$": "States.Array('--clean', $.paths.clean, '--curated', States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq2', $.run), '--metrics', States.Format('s3://is459-g7-projectbucket/runs/{}/metrics/bq2/analysis', $.run), '--dataset', $.dataset)"
+                  }
+                },
+                "ConfigurationOverrides": {
+                  "MonitoringConfiguration": {
+                    "S3MonitoringConfiguration": {
+                      "LogUri": "s3://is459-g7-projectbucket/logs/EMR-Serverless"
+                    }
+                  }
+                }
+              },
+              "ResultPath": null,
+              "End": true
+            }
+          }
+        }
+      ]
+    },
+    "CreateCrawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:createCrawler",
+      "Parameters": {
+        "Name.$": "States.Format('aml-run-{}', $.run)",
+        "Role": "is459-g7-glue-role",
+        "DatabaseName.$": "$.db",
+        "Targets": {
+          "S3Targets": [
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/clean/transactions/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/clean/banks/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/clean/fx_rates/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/clean/schemes/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/raw/accounts/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/account_profiles/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/account_labels/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/risk_rankings/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/capacity_evaluation/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq1/capacity_summary/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq2/flow_comparison/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq2/holding_time/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq2/scheme_profile/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq2/country_pairs/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq2/bank_entry_exit/', $.run)"
+            },
+            {
+              "Path.$": "States.Format('s3://is459-g7-projectbucket/runs/{}/curated/bq2/scheme_edges/', $.run)"
+            }
+          ]
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Glue.AlreadyExistsException"
+          ],
+          "ResultPath": null,
+          "Next": "StartCrawler"
+        },
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "StartCrawler"
+    },
+    "StartCrawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+      "Parameters": {
+        "Name.$": "States.Format('aml-run-{}', $.run)"
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "Glue.CrawlerRunningException"
+          ],
+          "ResultPath": null,
+          "Next": "WaitForCrawler"
+        },
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "WaitForCrawler"
+    },
+    "WaitForCrawler": {
+      "Type": "Wait",
+      "Seconds": 20,
+      "Next": "CheckCrawler"
+    },
+    "CheckCrawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler",
+      "Parameters": {
+        "Name.$": "States.Format('aml-run-{}', $.run)"
+      },
+      "ResultSelector": {
+        "State.$": "$.Crawler.State",
+        "Info.$": "$.Crawler"
+      },
+      "ResultPath": "$.crawler",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "CrawlerDone?"
+    },
+    "CrawlerDone?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.crawler.State",
+              "StringEquals": "READY"
+            },
+            {
+              "Variable": "$.crawler.Info.LastCrawl.Status",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.crawler.Info.LastCrawl.Status",
+              "StringEquals": "SUCCEEDED"
+            }
+          ],
+          "Next": "BuildCountryLookup"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.crawler.State",
+              "StringEquals": "READY"
+            },
+            {
+              "Variable": "$.crawler.Info.LastCrawl.Status",
+              "IsPresent": true
+            },
+            {
+              "Not": {
+                "Variable": "$.crawler.Info.LastCrawl.Status",
+                "StringEquals": "SUCCEEDED"
+              }
+            }
+          ],
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Default": "WaitForCrawler"
+    },
+    "BuildCountryLookup": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString.$": "States.Format('CREATE TABLE {}.account_country_lookup WITH ( format = \\'PARQUET\\', external_location = \\'{}\\' ) AS WITH account_country_legs AS ( SELECT CAST(from_bank AS VARCHAR) AS bank_id, CAST(from_account AS VARCHAR) AS account_id, from_country AS account_country FROM {}.transactions WHERE from_country IS NOT NULL UNION ALL SELECT CAST(to_bank AS VARCHAR) AS bank_id, CAST(to_account AS VARCHAR) AS account_id, to_country AS account_country FROM {}.transactions WHERE to_country IS NOT NULL ), country_counts AS ( SELECT bank_id, account_id, account_country, COUNT(*) AS appearances FROM account_country_legs GROUP BY bank_id, account_id, account_country ) SELECT bank_id, account_id, CONCAT(bank_id, \\':\\', account_id) AS account_key, MAX_BY(account_country, appearances) AS account_country FROM country_counts GROUP BY bank_id, account_id', $.db, $.paths.lookup, $.db, $.db)",
+        "QueryExecutionContext": {
+          "Database.$": "$.db"
+        },
+        "WorkGroup": "primary",
+        "ResultConfiguration": {
+          "OutputLocation.$": "States.Format('s3://is459-g7-projectbucket/athena-results/runs/{}/country-lookup/', $.run)"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "CreateDashboardView"
+    },
+    "CreateDashboardView": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString.$": "States.Format('CREATE OR REPLACE VIEW {}.bq1_dashboard_queue AS SELECT r.profile_date, r.daily_rank, r.daily_active_accounts, r.bank_id, r.account_id, r.account_key, COALESCE(c.account_country, \\'Unknown\\') AS account_country, r.risk_score, r.txn_count, r.total_amount_usd, r.ach_share, r.cross_border_share, r.fan_in, r.fan_out, r.amount_band_share, r.pass_through_share_24h, r.activity_spike_ratio, r.ach_points, r.cross_border_points, r.fan_out_points, r.fan_in_points, r.amount_band_points, r.pass_through_points, r.activity_spike_points, l.account_day_is_laundering FROM {}.risk_rankings r LEFT JOIN {}.account_labels l ON r.profile_date = l.profile_date AND r.account_key = l.account_key LEFT JOIN {}.account_country_lookup c ON r.account_key = c.account_key WHERE r.daily_rank <= 1000', $.db, $.db, $.db, $.db)",
+        "QueryExecutionContext": {
+          "Database.$": "$.db"
+        },
+        "WorkGroup": "primary",
+        "ResultConfiguration": {
+          "OutputLocation.$": "States.Format('s3://is459-g7-projectbucket/athena-results/runs/{}/dashboard-view/', $.run)"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "WriteRunRecord"
+    },
+    "WriteRunRecord": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:s3:putObject",
+      "Comment": "Written last: the dashboard only lists runs that have this file",
+      "Parameters": {
+        "Bucket": "is459-g7-projectbucket",
+        "Key.$": "States.Format('runs/{}/run.json', $.run)",
+        "ContentType": "application/json",
+        "Body": {
+          "run.$": "$.run",
+          "db.$": "$.db",
+          "dataset.$": "$.dataset",
+          "execution.$": "$$.Execution.Name",
+          "started.$": "$$.Execution.StartTime",
+          "finished.$": "$$.State.EnteredTime"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "PipelineSucceeded"
+    },
+    "PipelineSucceeded": {
+      "Type": "Succeed"
+    },
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "A step failed; see the execution's error field and the EMR Serverless logs in s3://is459-g7-projectbucket/logs/"
+    }
+  }
+}

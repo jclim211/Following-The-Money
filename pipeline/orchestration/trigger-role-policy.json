@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListRuns",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::is459-g7-projectbucket"
+    },
+    {
+      "Sid": "StartPipeline",
+      "Effect": "Allow",
+      "Action": "states:StartExecution",
+      "Resource": "arn:aws:states:us-east-1:761018854594:stateMachine:is459-g7-pipeline"
+    },
+    {
+      "Sid": "Logs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:761018854594:*"
+    }
+  ]
+}

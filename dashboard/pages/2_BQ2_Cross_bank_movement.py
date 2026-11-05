@@ -1,12 +1,13 @@
 """
 IS459 Group 7 | BQ2 Dashboard: how do laundering networks move funds across banks?
 
-Reads the BQ2 outputs in Athena (Glue database aml_bq2_curated):
+Reads the BQ2 outputs in Athena: aml_bq2_curated for the original HI-Medium tables, or the
+Glue database of the open pipeline run:
   flow_comparison, holding_time, scheme_profile, country_pairs, bank_entry_exit, scheme_edges
-and, for bank size proxies, aml_clean.banks and aml_raw.raw_accounts. Needs plotly and networkx.
+and, for bank size proxies, the banks and raw accounts tables. Needs plotly and networkx.
 
-Second page of the BQ1 app (Streamlit picks up files in pages/ automatically):
-  streamlit run app.py
+Opened from the sidebar in Home.py:
+  streamlit run Home.py
 Uses the same AWS profile and EC2 fallback as app.py (BQ1_AWS_PROFILE, BQ1_REGION).
 """
 import os
@@ -21,14 +22,17 @@ import plotly.graph_objects as go
 import streamlit as st
 from botocore.exceptions import ProfileNotFound
 
+from common.runs import open_run
+
 # ---------------------------------------------------------------- settings
 REGION = os.getenv("BQ1_REGION", "us-east-1")
 PROFILE = os.getenv("BQ1_AWS_PROFILE", "is459")
-DATABASE = "aml_bq2_curated"
+RUN = open_run()
+DATABASE = RUN["db"] if RUN else "aml_bq2_curated"
 WORKGROUP = "primary"
 BUCKET = "is459-g7-projectbucket"
-QUERY_PREFIX = "scripts/queries/bq2/dashboard"
-ATHENA_OUTPUT = f"s3://{BUCKET}/athena-results/bq2/dashboard"
+QUERY_PREFIX = "scripts/queries/run" if RUN else "scripts/queries/bq2/dashboard"
+ATHENA_OUTPUT = f"s3://{BUCKET}/athena-results/runs/{RUN['run']}/dashboard" if RUN else f"s3://{BUCKET}/athena-results/bq2/dashboard"
 
 GROUP_COLORS = alt.Scale(domain=["laundering", "normal"], range=["#d62728", "#9ca3af"])
 DIMENSION_LABELS = {"payment_format": "Payment format", "conversion": "Currency conversion",
@@ -94,22 +98,22 @@ def aws_session():
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_sql(name: str) -> str:
+def load_sql(name: str, prefix: str) -> str:
     """Read a stored query from S3."""
-    obj = aws_session().client("s3").get_object(Bucket=BUCKET, Key=f"{QUERY_PREFIX}/{name}.sql")
+    obj = aws_session().client("s3").get_object(Bucket=BUCKET, Key=f"{prefix}/{name}.sql")
     return obj["Body"].read().decode("utf-8")
 
 
 @st.cache_data(ttl=3600, show_spinner="Querying Athena...")
-def run_query(name: str) -> pd.DataFrame:
+def run_stored(name: str, database: str, prefix: str, output: str) -> pd.DataFrame:
     """Run a stored query and read its result CSV from S3. Athena reuses results for 60 min to save cost."""
     session = aws_session()
     athena = session.client("athena")
     qid = athena.start_query_execution(
-        QueryString=load_sql(name),
-        QueryExecutionContext={"Database": DATABASE},
+        QueryString=load_sql(name, prefix).replace("{db}", database),
+        QueryExecutionContext={"Database": database},
         WorkGroup=WORKGROUP,
-        ResultConfiguration={"OutputLocation": f"{ATHENA_OUTPUT}/{name}/"},
+        ResultConfiguration={"OutputLocation": f"{output}/{name}/"},
         ResultReuseConfiguration={"ResultReuseByAgeConfiguration": {"Enabled": True, "MaxAgeInMinutes": 60}},
     )["QueryExecutionId"]
 
@@ -133,6 +137,10 @@ def run_query(name: str) -> pd.DataFrame:
     return df
 
 
+def run_query(name: str) -> pd.DataFrame:
+    return run_stored(name, DATABASE, QUERY_PREFIX, ATHENA_OUTPUT)
+
+
 def as_bool(s: pd.Series) -> pd.Series:
     return s.astype(str).str.lower() == "true"
 
@@ -147,7 +155,12 @@ st.set_page_config(page_title="BQ2 Cross-bank Movement", page_icon="🏦", layou
 st.title("🏦 BQ2: How do laundering networks move funds across banks?")
 flow = run_query("flow_comparison")
 profile = run_query("scheme_profile")
-st.caption(f"Athena results read from S3 (aml_bq2_curated). Clean HI-Medium transactions 2022-09-01 to 09-16, "
+if RUN:
+    dates = run_query("date_range").iloc[0]
+    DATASET, FIRST_DAY, LAST_DAY = RUN["dataset"], dates["first_day"], dates["last_day"]
+else:
+    DATASET, FIRST_DAY, LAST_DAY = "HI-Medium", "2022-09-01", "2022-09-16"
+st.caption(f"Athena results read from S3 ({DATABASE}). Clean {DATASET} transactions {FIRST_DAY} to {LAST_DAY}, "
            f"plus the {len(profile):,} laundering schemes reconstructed from Patterns.txt.")
 n_laundering = int(flow[(flow["grp"] == "laundering") & (flow["dimension"] == "border")]["n_tx"].sum())
 n_normal = int(flow[(flow["grp"] == "normal") & (flow["dimension"] == "border")]["n_tx"].sum())
@@ -229,7 +242,7 @@ with tab_flow:
                       f"{h['median_hold_minutes'].iloc[0] / 60:.1f} h")
     st.caption("Same-minute outgoing transfers count as sending the money on. The next outgoing transfer can be "
                "any transfer of that account, not necessarily laundering. 'never' is partly because the data "
-               "ends on 2022-09-16.")
+               f"ends on {LAST_DAY}.")
 
     st.subheader("Scheme types: transfers, banks and countries per scheme")
     types = (profile.groupby("scheme_type")
@@ -252,7 +265,7 @@ with tab_flow:
             "median_usd": st.column_config.NumberColumn("Median total USD", format="$%.0f"),
             "in_clean": st.column_config.NumberColumn("Transfers in clean window", format="%.0f%%"),
         })
-    st.caption("Scheme transfers after 2022-09-16 are outside the clean window but kept, so a scheme's "
+    st.caption(f"Scheme transfers after {LAST_DAY} are outside the clean window but kept, so a scheme's "
                "exit is its real last transfer.")
 
 # ---------------------------------------------------------------- 2. country routes
@@ -675,7 +688,7 @@ with tab_net:
                   " / ".join("n/a" if pd.isna(v) else f"{v:.1f}x" for v in (rr["entry_ratio"], rr["exit_ratio"])),
                   help="All scheme types: actual schemes / what the bank's share of clean transactions predicts.")
         c4.metric("Size: clean transactions", "n/a" if pd.isna(size_txns) else f"{int(size_txns):,}",
-                  help="Sent plus received clean transactions, 2022-09-01 to 09-16.")
+                  help=f"Sent plus received clean transactions, {FIRST_DAY} to {LAST_DAY}.")
         c5.metric("Size: accounts", "n/a" if pd.isna(size_acc) else f"{int(size_acc):,}",
                   help="Accounts listed for this bank in accounts.csv.")
 

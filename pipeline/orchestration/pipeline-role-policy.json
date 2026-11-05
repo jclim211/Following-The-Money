@@ -1,0 +1,83 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Spark",
+      "Effect": "Allow",
+      "Action": [
+        "emr-serverless:StartJobRun",
+        "emr-serverless:GetJobRun",
+        "emr-serverless:CancelJobRun",
+        "emr-serverless:TagResource"
+      ],
+      "Resource": "arn:aws:emr-serverless:us-east-1:761018854594:/applications/00g9nf6jpni06m09*"
+    },
+    {
+      "Sid": "PassRoles",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::761018854594:role/is459-g7-emr-serverless-role",
+        "arn:aws:iam::761018854594:role/is459-g7-glue-role"
+      ]
+    },
+    {
+      "Sid": "SyncRules",
+      "Effect": "Allow",
+      "Action": [
+        "events:PutTargets",
+        "events:PutRule",
+        "events:DescribeRule"
+      ],
+      "Resource": "arn:aws:events:us-east-1:761018854594:rule/StepFunctionsGetEventsFor*"
+    },
+    {
+      "Sid": "Glue",
+      "Effect": "Allow",
+      "Action": [
+        "glue:CreateDatabase",
+        "glue:GetDatabase",
+        "glue:CreateCrawler",
+        "glue:StartCrawler",
+        "glue:GetCrawler",
+        "glue:GetTable",
+        "glue:GetTables",
+        "glue:GetPartitions",
+        "glue:BatchGetPartition",
+        "glue:CreateTable",
+        "glue:UpdateTable",
+        "glue:DeleteTable"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Athena",
+      "Effect": "Allow",
+      "Action": [
+        "athena:StartQueryExecution",
+        "athena:GetQueryExecution",
+        "athena:StopQueryExecution",
+        "athena:GetWorkGroup"
+      ],
+      "Resource": "arn:aws:athena:us-east-1:761018854594:workgroup/primary"
+    },
+    {
+      "Sid": "S3",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
+        "s3:ListBucketMultipartUploads"
+      ],
+      "Resource": [
+        "arn:aws:s3:::is459-g7-projectbucket",
+        "arn:aws:s3:::is459-g7-projectbucket/runs/*",
+        "arn:aws:s3:::is459-g7-projectbucket/athena-results/*"
+      ]
+    }
+  ]
+}

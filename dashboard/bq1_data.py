@@ -245,7 +245,8 @@ class Check:
     detail: str
 
 
-def run_checks(queue: pd.DataFrame, capacity: pd.DataFrame) -> list[Check]:
+def run_checks(queue: pd.DataFrame, capacity: pd.DataFrame, baseline: bool = True) -> list[Check]:
+    """Check the data. baseline=False skips the checks fixed to the verified HI-Medium results."""
     checks: list[Check] = []
 
     def add(name: str, passed: bool, detail: str) -> None:
@@ -259,7 +260,8 @@ def run_checks(queue: pd.DataFrame, capacity: pd.DataFrame) -> list[Check]:
     add("Queue contains at least the daily top 100", min_rows >= EXPECTED_ROWS_PER_DATE,
         f"{len(queue):,} rows; {min_rows:,}-{max_rows:,} per date")
     add("Capacity summary has 5 rows", len(capacity) == 5, f"{len(capacity)} rows")
-    add("Queue covers 16 dates", n_dates == EXPECTED_DATES, f"{n_dates} dates")
+    if baseline:
+        add("Queue covers 16 dates", n_dates == EXPECTED_DATES, f"{n_dates} dates")
     add("Every date has the same number of ranked rows", min_rows == max_rows,
         f"min {min_rows:,}, max {max_rows:,} rows per date")
 
@@ -271,8 +273,9 @@ def run_checks(queue: pd.DataFrame, capacity: pd.DataFrame) -> list[Check]:
         "all dates OK" if not bad_dates else f"problem dates: {bad_dates[:5]}")
 
     latest = queue["profile_date"].max()
-    add("Latest (default) date is 2022-09-16", latest == EXPECTED_LATEST_DATE,
-        f"latest date in file: {latest.date().isoformat()}")
+    if baseline:
+        add("Latest (default) date is 2022-09-16", latest == EXPECTED_LATEST_DATE,
+            f"latest date in file: {latest.date().isoformat()}")
 
     ordered = queue.sort_values(["profile_date", "daily_rank"])
     rises = ordered.groupby("profile_date")["risk_score"].diff().gt(1e-9).sum()
@@ -283,16 +286,17 @@ def run_checks(queue: pd.DataFrame, capacity: pd.DataFrame) -> list[Check]:
     add("Seven components add up to risk_score (within 0.01)", (diff <= 0.01).all(),
         f"largest gap {diff.max():.4f}")
 
-    merged = VERIFIED_CAPACITY.merge(capacity, on="daily_capacity", how="left", suffixes=("_exp", ""))
-    mismatches = []
-    for col in ["avg_laundering_detected_per_day", "recommended_score_threshold",
-                "overall_precision", "overall_detection_rate"]:
-        for _, row in merged.iterrows():
-            exp, got = row[f"{col}_exp"], row[col]
-            if pd.isna(got) or not math.isclose(exp, got, rel_tol=1e-3, abs_tol=1e-5):
-                mismatches.append(f"{int(row['daily_capacity'])}/{col}: expected {exp}, got {got}")
-    add("Capacity figures match the verified results", not mismatches,
-        "all 5 capacities match" if not mismatches else "; ".join(mismatches[:3]))
+    if baseline:
+        merged = VERIFIED_CAPACITY.merge(capacity, on="daily_capacity", how="left", suffixes=("_exp", ""))
+        mismatches = []
+        for col in ["avg_laundering_detected_per_day", "recommended_score_threshold",
+                    "overall_precision", "overall_detection_rate"]:
+            for _, row in merged.iterrows():
+                exp, got = row[f"{col}_exp"], row[col]
+                if pd.isna(got) or not math.isclose(exp, got, rel_tol=1e-3, abs_tol=1e-5):
+                    mismatches.append(f"{int(row['daily_capacity'])}/{col}: expected {exp}, got {got}")
+        add("Capacity figures match the verified results", not mismatches,
+            "all 5 capacities match" if not mismatches else "; ".join(mismatches[:3]))
 
     unexpected_labels = sorted(UNEXPECTED_LABEL_COLUMNS.intersection(queue.columns))
     add("No unexpected label columns", not unexpected_labels,
@@ -414,7 +418,7 @@ def capacity_view(capacity: pd.DataFrame) -> pd.DataFrame:
     return cap
 
 
-def random_review_reference(capacity: pd.DataFrame) -> dict:
+def random_review_reference(capacity: pd.DataFrame, total_profile_rows: int = TOTAL_PROFILE_ROWS) -> dict:
     """What reviewing randomly chosen active accounts would find, for context.
 
     laundering account-days per day = detected per day / detection rate
@@ -422,7 +426,7 @@ def random_review_reference(capacity: pd.DataFrame) -> dict:
     """
     row = capacity.loc[capacity["daily_capacity"] == RECOMMENDED_CAPACITY].iloc[0]
     laundering_per_day = row["avg_laundering_detected_per_day"] / row["overall_detection_rate"]
-    active_per_day = TOTAL_PROFILE_ROWS / int(row["days_evaluated"])
+    active_per_day = total_profile_rows / int(row["days_evaluated"])
     base_rate = laundering_per_day / active_per_day
     return {
         "laundering_per_day": laundering_per_day,

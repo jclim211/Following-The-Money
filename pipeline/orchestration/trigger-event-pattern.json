@@ -1,0 +1,22 @@
+{
+  "source": [
+    "aws.s3"
+  ],
+  "detail-type": [
+    "Object Created"
+  ],
+  "detail": {
+    "bucket": {
+      "name": [
+        "is459-g7-projectbucket"
+      ]
+    },
+    "object": {
+      "key": [
+        {
+          "wildcard": "runs/*/raw/*"
+        }
+      ]
+    }
+  }
+}
