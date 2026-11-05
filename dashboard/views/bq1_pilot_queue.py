@@ -23,17 +23,19 @@ import streamlit as st
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # bq1_data.py sits in dashboard/
 import bq1_data as bd  # noqa: E402
+from common import theme  # noqa: E402
 
 DATA_DIR = Path(os.environ.get("BQ1_DATA_DIR", Path(__file__).resolve().parents[1] / "data_bq1"))
 
 # Palette: one series colour + one highlight colour (both checked for contrast
 # and colour-blind separation), plus neutral inks for text, tracks and grid.
-SERIES = "#2E6DB4"     # navy-blue: every ordinary mark
-ACCENT = "#0FA3A3"     # teal: the selected account / recommended capacity
-TRACK = "#E3E8EF"      # light grey: "maximum possible" bars
-INK = "#1B2A3A"
-MUTED = "#5B6675"
-GRID = "#EDF0F4"
+# Colours come from the shared design system (common/theme.py).
+SERIES = theme.S_PURPLE   # every ordinary mark
+ACCENT = theme.INK        # the selected account / recommended capacity
+TRACK = theme.TINT_PURPLE # "maximum possible" bars
+INK = theme.INK
+MUTED = theme.MUTED
+GRID = theme.GRID
 PLOT_CONFIG = {"displayModeBar": False}
 
 # Country name (as in the export) -> ISO 3166 code, shown as a flag image in the queue table.
@@ -67,17 +69,12 @@ def flag_url(country):
     iso = COUNTRY_ISO.get(country)
     return f"https://flagcdn.com/40x30/{iso}.png" if iso else UNKNOWN_BADGE
 
-st.set_page_config(page_title="BQ1 AML Investigator Queue", page_icon="🏦", layout="wide")
 
 st.markdown(
     """
     <style>
-      .block-container {padding-top: 1.6rem; padding-bottom: 2rem;}
-      h1 {color: #12263F; font-size: 1.9rem !important; margin-bottom: 0 !important;}
-      .subtitle {color: #5B6675; margin-top: .2rem; margin-bottom: 1rem;}
-      div[data-testid="stMetricValue"] {color: #12263F;}
-      .why {background: #F2F7FB; border-left: 4px solid #0FA3A3; padding: .8rem 1rem;
-            border-radius: 6px; color: #1B2A3A; line-height: 1.5;}
+      .why {background: #E5ECF6; border-left: 4px solid #1C1C1C; padding: .8rem 1rem;
+            border-radius: 12px; color: #1C1C1C; line-height: 1.5;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -107,18 +104,18 @@ def show(fig: go.Figure) -> None:
 def style(fig: go.Figure, title: str, height: int = 360) -> go.Figure:
     fig.update_layout(
         title={"text": title, "x": 0, "xanchor": "left", "font": {"size": 15, "color": INK}},
-        template="plotly_white",
+        template="plotly_white+snow",
         height=height,
         margin={"l": 10, "r": 20, "t": 50, "b": 10},
-        font={"color": MUTED, "size": 12},
+        font={"color": MUTED, "size": 12, "family": theme.FONT},
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
         hoverlabel={"bgcolor": "white", "font_size": 12, "font_color": INK},
         barcornerradius=4,
     )
-    fig.update_xaxes(gridcolor=GRID, zeroline=False, linecolor="#C9D1DB", title_font={"size": 12})
-    fig.update_yaxes(gridcolor=GRID, zeroline=False, linecolor="#C9D1DB", title_font={"size": 12})
+    fig.update_xaxes(gridcolor=GRID, zeroline=False, linecolor=theme.LINE, title_font={"size": 12})
+    fig.update_yaxes(gridcolor=GRID, zeroline=False, linecolor=theme.LINE, title_font={"size": 12})
     return fig
 
 
@@ -190,12 +187,12 @@ max_available = bd.available_capacity(queue)
 # ---------------------------------------------------------------------------
 # Header + sidebar filters
 # ---------------------------------------------------------------------------
-st.title("🏦 BQ1 · Daily AML Investigator Queue")
-st.markdown(
-    '<div class="subtitle">Which accounts should a fixed-capacity investigation team review first? '
+theme.page_header(
+    "Daily AML investigator queue",
+    "Which accounts should a fixed-capacity investigation team review first? "
     "Accounts are ranked each day by an explainable 100-point behavioural risk score. "
-    "<b>A high score means review first, not proven laundering.</b></div>",
-    unsafe_allow_html=True,
+    "<b>A high score means review first, not proven laundering.</b>",
+    eyebrow="BQ1 · Pilot queue",
 )
 
 with st.sidebar:

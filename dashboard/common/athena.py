@@ -52,14 +52,34 @@ def fill_placeholders(sql: str, params: dict) -> str:
     return sql
 
 
-@st.cache_data(ttl=3600, show_spinner="Querying Athena...")
-def run_query(name: str, params: dict = None, database: str = "aml_curated",
+def run_query(name: str, params: dict = None, database: str = None,
               folder: str = "bq1/dashboard", text_columns: tuple = ()) -> pd.DataFrame:
     """Run a stored read-only query and read its result CSV from S3.
 
-    Columns named in text_columns are left as text (for IDs such as bank_id that
-    look numeric but must keep their exact spelling).
+    database defaults to the BQ1 database of the run picked in the header
+    (aml_curated for Run 1). Columns named in text_columns are left as text
+    (for IDs such as bank_id that look numeric but must keep their exact spelling).
     """
+    if database is None:
+        from common.runs import current_run
+        run = current_run()
+        database = run.db("bq1", "aml_curated") if run else "aml_curated"
+    return _run_query(name, params, database, folder, text_columns)
+
+
+def mock_result(folder: str, name: str):
+    """Local UI testing without AWS: DASHBOARD_MOCK_DIR=<dir> reads <dir>/<folder>/<name>.csv."""
+    mock_dir = os.getenv("DASHBOARD_MOCK_DIR")
+    if not mock_dir:
+        return None
+    return pd.read_csv(os.path.join(mock_dir, folder, f"{name}.csv"))
+
+
+@st.cache_data(ttl=3600, show_spinner="Querying Athena...")
+def _run_query(name: str, params: dict, database: str, folder: str, text_columns: tuple) -> pd.DataFrame:
+    mocked = mock_result(folder, name)
+    if mocked is not None:
+        return mocked
     session = aws_session()
     athena = session.client("athena")
     qid = athena.start_query_execution(

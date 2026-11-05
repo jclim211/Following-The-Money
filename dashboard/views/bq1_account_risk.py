@@ -14,6 +14,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from common import theme
 from common.athena import run_query
 import bq1_data as bd
 
@@ -37,9 +38,9 @@ def why_flagged(row, top=3) -> str:
 
 
 # ---------------------------------------------------------------- layout
-st.set_page_config(page_title="BQ1 Investigator Queue", page_icon="🏦", layout="wide")
-st.title("🏦 BQ1: Which accounts should investigators review first?")
-st.caption("Athena results read from S3 (aml_curated). Risk score 0 to 100 = sum of weight x behaviour score.")
+theme.page_header("Which accounts should investigators review first?",
+                  "Athena results read from S3 (aml_curated). Risk score 0 to 100 = sum of weight x behaviour score.",
+                  eyebrow="BQ1 · Account risk")
 
 all_days = run_query("available_dates")["profile_date"].astype(str).tolist()
 
@@ -201,11 +202,11 @@ with tab_curve:
         bars = alt.Chart(marg).mark_bar().encode(
             x=alt.X("daily_capacity:Q", title="Accounts reviewed per day (top N)"),
             y=alt.Y("found_per_100_extra:Q", title="Laundering found per 100 extra reviews"),
-            color=alt.condition(alt.datum.found_per_100_extra >= min_per_100, alt.value("#4c78a8"),
-                                alt.value("#c7cdd6")),
+            color=alt.condition(alt.datum.found_per_100_extra >= min_per_100, alt.value(theme.S_PURPLE),
+                                alt.value(theme.FAINT)),
             tooltip=["daily_capacity", alt.Tooltip("found_per_100_extra:Q", format=".1f")])
         thr = alt.Chart(pd.DataFrame({"y": [min_per_100]})).mark_rule(strokeDash=[4, 4]).encode(y="y:Q")
-        knee_rule = alt.Chart(pd.DataFrame({"x": [knee]})).mark_rule(color="#e45756").encode(x="x:Q")
+        knee_rule = alt.Chart(pd.DataFrame({"x": [knee]})).mark_rule(color=theme.S_RED).encode(x="x:Q")
         st.altair_chart(bars + thr + knee_rule, width="stretch")
         st.caption("Each bar is the extra laundering found by reviewing 50 more accounts a day, scaled per 100 "
                    "reviews. Grey bars fall below your rule. Red line = knee of the detection curve.")
@@ -254,7 +255,7 @@ with tab_ind:
                 y=alt.Y("behaviour:N", sort="-x", title=None),
                 color=alt.Color("effect:N", title=None, legend=alt.Legend(orient="bottom"),
                                 scale=alt.Scale(domain=["Helps", "No effect", "Hurts"],
-                                                range=["#4c78a8", "#c7cdd6", "#e45756"])),
+                                                range=[theme.S_PURPLE, theme.FAINT, theme.S_RED])),
                 tooltip=["behaviour", "weight", "caught_without", "lost_when_removed",
                          alt.Tooltip("change_pct:Q", format=".1f")]),
             width="stretch")
@@ -332,7 +333,7 @@ with tab_drill:
                                     "max_points": [BEHAVIOURS[c][1] for c in POINT_COLS]})
                 base = alt.Chart(pts).encode(y=alt.Y("behaviour:N", sort=None, title=None))
                 st.altair_chart(
-                    base.mark_bar(color="#e5e7eb").encode(x=alt.X("max_points:Q", title="Points (grey = weight)"))
+                    base.mark_bar(color=theme.TINT_PURPLE).encode(x=alt.X("max_points:Q", title="Points (grey = weight)"))
                     + base.mark_bar().encode(x="points:Q", tooltip=["behaviour", "points", "max_points"]),
                     width="stretch")
             with right:
@@ -341,7 +342,7 @@ with tab_drill:
                     alt.Chart(hist).mark_line(point=True).encode(
                         x=alt.X("profile_date:O", title=None), y=alt.Y("risk_score:Q", title="Risk score",
                                                                         scale=alt.Scale(domain=[0, 100])),
-                        color=alt.Color("is_laundering:N", title="Laundering") if show_truth else alt.value("#4c78a8"),
+                        color=alt.Color("is_laundering:N", title="Laundering") if show_truth else alt.value(theme.S_PURPLE),
                         tooltip=["profile_date", "risk_score", "daily_rank"]),
                     width="stretch")
 

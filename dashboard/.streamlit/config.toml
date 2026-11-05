@@ -1,9 +1,17 @@
+# Base colours mirror common/theme.py (SnowUI dashboard design system). Change both together.
 [theme]
 base = "light"
-primaryColor = "#0FA3A3"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F2F5F9"
-textColor = "#1B2A3A"
+primaryColor = "#1C1C1C"
+backgroundColor = "#F7F9FB"
+secondaryBackgroundColor = "#EEF1F5"
+textColor = "#1C1C1C"
+linkColor = "#1C1C1C"
+borderColor = "#E5E7EB"
+baseRadius = "12px"
+showWidgetBorder = true
+
+[client]
+toolbarMode = "minimal"
 
 [browser]
 gatherUsageStats = false

@@ -1,0 +1,20 @@
+{
+  "_comment": "Pipeline runs shown in the dashboard's run menu. One entry per dataset run (BQ1 + BQ2). See README.md 'Add a run'.",
+  "runs": [
+    {
+      "run_id": "run-1",
+      "name": "IBM AML HI-Medium",
+      "created_at": "2026-11-05",
+      "status": "succeeded",
+      "period": "2022-09-01 to 2022-09-16",
+      "databases": {
+        "bq1": "aml_curated",
+        "bq2": "aml_bq2_curated",
+        "clean": "aml_clean"
+      },
+      "s3_prefix": "",
+      "row_counts": {},
+      "notes": "Current shared tables. Run 1 has no own S3 prefix yet, so its data can't be deleted from the UI."
+    }
+  ]
+}

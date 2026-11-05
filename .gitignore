@@ -8,3 +8,5 @@ venv/
 dashboard/tests/sample_data/
 .aws/
 *credentials*
+dashboard/.state/
+dashboard/tests/mock_athena/
