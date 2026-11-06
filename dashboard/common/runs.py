@@ -4,6 +4,8 @@ A run counts as finished once runs/<run>/run.json exists, because the pipeline w
 that file last. Home.py builds the sidebar from list_runs() and sets the open run.
 """
 import json
+import os
+from pathlib import Path
 
 import streamlit as st
 from botocore.exceptions import ClientError
@@ -16,6 +18,9 @@ RUN_KEY = "open_run"
 @st.cache_data(ttl=60, show_spinner=False)
 def list_runs() -> list:
     """Finished runs, newest first."""
+    mock = os.getenv("DASHBOARD_MOCK_DIR")  # local UI work: a saved run list, no AWS
+    if mock:
+        return json.loads((Path(mock) / "runs.json").read_text())
     s3 = aws_session().client("s3")
     folders = []
     for page in s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix="runs/", Delimiter="/"):

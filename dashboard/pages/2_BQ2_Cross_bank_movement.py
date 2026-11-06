@@ -107,6 +107,10 @@ def load_sql(name: str, prefix: str) -> str:
 @st.cache_data(ttl=3600, show_spinner="Querying Athena...")
 def run_stored(name: str, database: str, prefix: str, output: str) -> pd.DataFrame:
     """Run a stored query and read its result CSV from S3. Athena reuses results for 60 min to save cost."""
+    mock = os.getenv("DASHBOARD_MOCK_DIR")  # local UI work only: a saved CSV instead of Athena
+    if mock:
+        df = pd.read_csv(f"{mock}/bq2/dashboard/{name}.csv", dtype=str, keep_default_na=False, na_values=[""])
+        return df.apply(lambda c: pd.to_numeric(c, errors="coerce") if pd.to_numeric(c, errors="coerce").notna().sum() == c.notna().sum() else c)
     session = aws_session()
     athena = session.client("athena")
     qid = athena.start_query_execution(

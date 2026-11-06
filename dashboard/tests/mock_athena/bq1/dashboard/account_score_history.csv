@@ -1,0 +1,3 @@
+profile_date,daily_rank,daily_active_accounts,bank_id,account_id,account_key,account_country,risk_score,txn_count,total_amount_usd,ach_share,cross_border_share,fan_in,fan_out,amount_band_share,pass_through_share_24h,activity_spike_ratio,ach_points,cross_border_points,fan_out_points,fan_in_points,amount_band_points,pass_through_points,activity_spike_points,is_laundering
+2022-09-11,409,589198,25,81629EC50,25:81629EC50,China,65.0,3,29903.9601539734,1.0,1.0,3,0,1.0,0.0,3.0,25.0,15.0,0.0,15.0,10.0,0.0,0.0,1
+2022-09-16,1,1421148,25,81629EC50,25:81629EC50,China,92.5,5,43730.35029260999,1.0,1.0,3,2,1.0,1.0,3.888888888888888,25.0,15.0,7.5,15.0,10.0,10.0,10.0,1

@@ -1,0 +1,23 @@
+grp,dimension,value,n_tx,share,usd_median
+laundering,payment_format,ACH,26609,0.856,9840.0
+laundering,payment_format,Cheque,1274,0.041,6960.0
+laundering,payment_format,Credit Card,1025,0.033,1248.0
+laundering,payment_format,Cash,839,0.027,2640.0
+laundering,payment_format,Wire,652,0.021,20640.0
+laundering,payment_format,Bitcoin,497,0.016,2160.0
+laundering,payment_format,Reinvestment,186,0.006,7440.0
+normal,payment_format,ACH,2754272,0.094,4100.0
+normal,payment_format,Cheque,10724081,0.366,2900.0
+normal,payment_format,Credit Card,7676801,0.262,520.0
+normal,payment_format,Cash,3457490,0.118,1100.0
+normal,payment_format,Wire,1523640,0.052,8600.0
+normal,payment_format,Bitcoin,908323,0.031,900.0
+normal,payment_format,Reinvestment,2256159,0.077,3100.0
+laundering,border,domestic,13056,0.42,5520.0
+laundering,border,cross-border,18029,0.58,12480.0
+normal,border,domestic,24319639,0.83,2300.0
+normal,border,cross-border,4981130,0.17,5200.0
+laundering,conversion,same currency,27355,0.88,6000.0
+laundering,conversion,converted,3730,0.12,14640.0
+normal,conversion,same currency,28421746,0.97,2500.0
+normal,conversion,converted,879023,0.03,6100.0
