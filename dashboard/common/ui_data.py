@@ -1,14 +1,18 @@
 """Data for the new dashboard design (common/ui.py): the same stored Athena queries as the
 classic BQ1 and BQ2 pages, packed into the JSON the front end in ui/frontend/ reads.
 
-One payload per page and run, cached for an hour like the classic pages. The queries of a page
-run in parallel, so a cold load waits for the slowest query instead of the sum of all of them.
-Athena also reuses identical results for 60 minutes, so the cost is the same as the classic pages.
+Each query result is saved in S3 the first time it runs (athena-results/dashboard-saved/), and
+every later view reads that file instead of running Athena. A run's tables never change, so the
+saved result stays right; editing a stored query changes its key, so it runs again. On top of
+that, one payload per page and run is kept in memory for an hour. The queries of a page run in
+parallel, so a cold load waits for the slowest query instead of the sum of all of them.
 
 Set DASHBOARD_MOCK_DIR=tests/mock_athena to run the design locally without AWS.
 """
 from __future__ import annotations
 
+import hashlib
+import io
 import math
 import os
 import sys
@@ -18,6 +22,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from botocore.exceptions import ClientError
 
 from common.athena import ATHENA_OUTPUT, BUCKET, WORKGROUP, aws_session, fill_placeholders
 
@@ -28,6 +33,8 @@ DATA_DIR = Path(os.environ.get("BQ1_DATA_DIR", Path(__file__).resolve().parents[
 BQ1_TEXT_COLUMNS = ("profile_date", "bank_id", "account_id", "account_key", "account_country")
 BQ2_QUERIES = ["flow_comparison", "scheme_profile", "holding_time", "country_pairs", "bank_entry_exit",
                "scheme_edges", "bank_size"]
+# Query results saved by the dashboard (under athena-results/, which the server already writes to).
+SAVED_PREFIX = "athena-results/dashboard-saved"
 
 
 # ---------------------------------------------------------------- Athena
@@ -54,10 +61,31 @@ def _sql(key: str) -> str:
     return obj["Body"].read().decode("utf-8")
 
 
-def _athena(athena, s3, name: str, sql: str, database: str, output: str, text_columns=()) -> pd.DataFrame:
-    """Run one read-only query and read its result CSV from S3 (the flow of common.athena.run_query)."""
+def saved_key(database: str, name: str, sql: str) -> str:
+    """Where a query's result is saved. The key holds a hash of the SQL text, so editing a
+    stored query in S3 makes the dashboard run it again instead of showing an old result."""
+    digest = hashlib.sha1(sql.encode("utf-8")).hexdigest()[:12]
+    return f"{SAVED_PREFIX}/{database}/{name}-{digest}.csv"
+
+
+def _read_csv(raw: bytes, text_columns=()) -> pd.DataFrame:
+    return _numbers(pd.read_csv(io.BytesIO(raw), dtype=str, keep_default_na=False, na_values=[""]), text_columns)
+
+
+def _athena(athena, s3, name: str, sql: str, database: str, output: str, text_columns=()):
+    """One query's result as (DataFrame, read_from_saved).
+
+    First looks for the result saved in S3 by an earlier view. If there is none, runs the
+    stored query in Athena (the flow of common.athena.run_query) and saves the result CSV,
+    so every later view, after a restart too, reads it straight from S3 without Athena.
+    """
     if os.getenv("DASHBOARD_MOCK_DIR"):
-        return _numbers(_mock(name), text_columns)
+        return _numbers(_mock(name), text_columns), False
+    key = saved_key(database, name, sql)
+    try:
+        return _read_csv(s3.get_object(Bucket=BUCKET, Key=key)["Body"].read(), text_columns), True
+    except ClientError:  # not saved yet (or not readable): run the query
+        pass
     qid = athena.start_query_execution(
         QueryString=sql,
         QueryExecutionContext={"Database": database},
@@ -74,25 +102,30 @@ def _athena(athena, s3, name: str, sql: str, database: str, output: str, text_co
     if status["State"] != "SUCCEEDED":
         raise RuntimeError(f"{name}: {status.get('StateChangeReason', status['State'])}")
     bucket, key = execution["ResultConfiguration"]["OutputLocation"].removeprefix("s3://").split("/", 1)
-    body = s3.get_object(Bucket=bucket, Key=key)["Body"]
-    return _numbers(pd.read_csv(body, dtype=str, keep_default_na=False, na_values=[""]), text_columns)
+    raw = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    try:  # a run's tables never change, so the result can be kept
+        s3.put_object(Bucket=BUCKET, Key=saved_key(database, name, sql), Body=raw, ContentType="text/csv")
+    except ClientError:  # no write access: still show the result, Athena runs again next time
+        pass
+    return _read_csv(raw, text_columns), False
 
 
-def _run_all(jobs: dict, database: str, output: str, text_columns=()) -> dict:
-    """jobs = {name: sql}. Returns {name: DataFrame or the exception it raised}."""
+def _run_all(jobs: dict, database: str, output: str, text_columns=()):
+    """jobs = {name: sql}. Returns ({name: DataFrame or the exception it raised}, all read from saved results)."""
     mock = bool(os.getenv("DASHBOARD_MOCK_DIR"))
     session = aws_session()
     athena = None if mock else session.client("athena")
     s3 = None if mock else session.client("s3")
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         futures = {n: pool.submit(_athena, athena, s3, n, sql, database, output, text_columns) for n, sql in jobs.items()}
-    out = {}
+    out, saved = {}, True
     for name, fut in futures.items():
         try:
-            out[name] = fut.result()
+            out[name], from_saved = fut.result()
+            saved = saved and from_saved
         except Exception as err:  # reported per query; the caller decides what is fatal
-            out[name] = err
-    return out
+            out[name], saved = err, False
+    return out, saved and not mock
 
 
 def _value(v, digits=None):
@@ -120,7 +153,7 @@ def bq2_payload(run: dict | None) -> dict:
     names = BQ2_QUERIES + (["date_range"] if run else [])
     mock = bool(os.getenv("DASHBOARD_MOCK_DIR"))
     jobs = {n: "" if mock else _sql(f"{prefix}/{n}").replace("{db}", db) for n in names}
-    res = _run_all(jobs, db, output)
+    res, saved = _run_all(jobs, db, output)
     failed = {n: r for n, r in res.items() if isinstance(r, Exception) and n != "bank_size"}
     if failed:
         raise RuntimeError("; ".join(f"{n}: {str(e)[:200]}" for n, e in failed.items()))
@@ -150,7 +183,7 @@ def bq2_payload(run: dict | None) -> dict:
     edges = edges.sort_values(["scheme_id", "step"])
     return {
         "kind": "bq2",
-        "meta": {"dataset": dataset, "first_day": first_day, "last_day": last_day, "db": db, "source": "athena"},
+        "meta": {"dataset": dataset, "first_day": first_day, "last_day": last_day, "db": db, "source": "athena", "saved": saved},
         "kpi": {"laundering": int(border.loc[border["grp"] == "laundering", "n_tx"].sum()),
                 "normal": int(border.loc[border["grp"] == "normal", "n_tx"].sum()),
                 "schemes": int(len(profile)),
@@ -173,7 +206,7 @@ def bq2_payload(run: dict | None) -> dict:
 
 # ---------------------------------------------------------------- BQ1
 def _bq1_frames(run: dict | None):
-    """(queue, capacity, source, note): Athena first; the CSV export only for the original tables."""
+    """(queue, capacity, source, note, saved): Athena first; the CSV export only for the original tables."""
     db = run["db"] if run else None
     if run or os.environ.get("BQ1_DATA_SOURCE", "athena").lower() != "csv":
         try:
@@ -183,11 +216,11 @@ def _bq1_frames(run: dict | None):
             params = {"db": db} if run else {}
             jobs = {n: "" if mock else fill_placeholders(_sql(f"scripts/queries/{folder}/{n}"), params)
                     for n in ("dashboard_queue", "capacity_summary")}
-            res = _run_all(jobs, database, f"{ATHENA_OUTPUT}/{folder}", BQ1_TEXT_COLUMNS)
+            res, saved = _run_all(jobs, database, f"{ATHENA_OUTPUT}/{folder}", BQ1_TEXT_COLUMNS)
             bad = {n: r for n, r in res.items() if isinstance(r, Exception)}
             if bad:
                 raise RuntimeError("; ".join(f"{n}: {str(e)[:200]}" for n, e in bad.items()))
-            return bd.prepare_queue(res["dashboard_queue"]), bd.prepare_capacity(res["capacity_summary"]), "athena", ""
+            return bd.prepare_queue(res["dashboard_queue"]), bd.prepare_capacity(res["capacity_summary"]), "athena", "", saved
         except Exception as err:
             if run:  # the CSV export is HI-Medium, so never show it for another run
                 raise
@@ -197,13 +230,13 @@ def _bq1_frames(run: dict | None):
     missing = [f for f in (bd.QUEUE_FILE, bd.CAPACITY_FILE) if not (DATA_DIR / f).exists()]
     if missing:
         raise RuntimeError(f"Athena could not be reached ({note}) and {', '.join(missing)} is missing in {DATA_DIR}.")
-    return bd.load_queue(DATA_DIR / bd.QUEUE_FILE), bd.load_capacity(DATA_DIR / bd.CAPACITY_FILE), "csv", note
+    return bd.load_queue(DATA_DIR / bd.QUEUE_FILE), bd.load_capacity(DATA_DIR / bd.CAPACITY_FILE), "csv", note, False
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def bq1_payload(run: dict | None) -> dict:
     """The investigator queue (ranks 1 to 1,000 per date) and the capacity summary, checked by bq1_data."""
-    q, cap, source, note = _bq1_frames(run)
+    q, cap, source, note, saved = _bq1_frames(run)
     checks = bd.run_checks(q, cap, baseline=run is None)
     q = q.assign(d=q["profile_date"].dt.strftime("%Y-%m-%d"))
     dates = sorted(q["d"].unique())
@@ -226,7 +259,7 @@ def bq1_payload(run: dict | None) -> dict:
     return {
         "kind": "bq1",
         "meta": {"dataset": run["dataset"] if run else "HI-Medium", "db": run["db"] if run else "aml_curated",
-                 "source": source, "note": note},
+                 "source": source, "note": note, "saved": saved},
         "bq1": {
             "dates": dates, "active": active, "rows": rows,
             "cap": [{k: (_value(v) if k in int_cols else _value(v, 6)) for k, v in row.items()}

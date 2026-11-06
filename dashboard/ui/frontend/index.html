@@ -5336,7 +5336,9 @@ function srcBadge() {
   const m = DATA.meta || {};
   return m.source === "csv"
     ? `<span class="lozenge warning" title="Athena could not be reached, so this page shows the CSV export in data_bq1/">CSV export</span>`
-    : `<span class="lozenge success" title="Read from Athena (${esc(m.db || "")}), refreshed hourly">Live from Athena</span>`;
+    : m.saved
+      ? `<span class="lozenge success" title="Athena results saved in S3 by an earlier view (${esc(m.db || "")}), so no query ran">Saved results from S3</span>`
+      : `<span class="lozenge success" title="Queried in Athena (${esc(m.db || "")}) and saved in S3 for the next view">Live from Athena</span>`;
 }
 function errorPage(p) {
   const run = p.run || "HI-Medium (current)";
