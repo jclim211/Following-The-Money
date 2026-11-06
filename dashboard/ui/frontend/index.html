@@ -3344,6 +3344,8 @@ body.loading { overflow: hidden; }
 .errbox > .ic { width: 20px; height: 20px; color: var(--ds-icon-danger); flex: none; margin-top: 2px; }
 .errbox h3 { font: var(--ds-font-heading-small); margin: 0 0 var(--ds-space-050); }
 .errbox pre { white-space: pre-wrap; word-break: break-word; font: var(--ds-font-code); background: var(--ds-background-neutral); padding: var(--ds-space-100); border-radius: var(--ds-radius-small); margin: var(--ds-space-100) 0; }
+html.inner-scroll { height: 100%; overflow: hidden; }
+html.inner-scroll body { height: 100%; overflow-y: auto; }
 .classic { display: flex; gap: var(--ds-space-100); align-items: center; margin-top: var(--ds-space-400); font: var(--ds-font-body-small); color: var(--ds-text-subtlest); }
 .classic .ic { width: 14px; height: 14px; flex: none; }
 .classic a { color: var(--ds-link); }
@@ -5305,7 +5307,7 @@ function route() {
   else if (p.kind === "bq1") { page.innerHTML = bq1Page(p); wireRunPicker(p); wireBq1(); }
   else { page.innerHTML = bq2Page(p); wireRunPicker(p); wireTabs(); }
   closeNav(true);
-  window.scrollTo(0, 0);
+  window.scrollTo(0, 0); document.body.scrollTop = 0;
 }
 /* side nav: hidden until the pointer reaches the handle or the left edge; a click pins it open */
 const appEl = $("#app"), navHandle = $("#navHandle"), sidenav = $("#sidenav");
@@ -5336,7 +5338,9 @@ function srcBadge() {
   const m = DATA.meta || {};
   return m.source === "csv"
     ? `<span class="lozenge warning" title="Athena could not be reached, so this page shows the CSV export in data_bq1/">CSV export</span>`
-    : `<span class="lozenge success" title="Read from Athena (${esc(m.db || "")}), refreshed hourly">Live from Athena</span>`;
+    : m.saved
+      ? `<span class="lozenge success" title="Athena results saved in S3 by an earlier view (${esc(m.db || "")}), so no query ran">Saved results from S3</span>`
+      : `<span class="lozenge success" title="Queried in Athena (${esc(m.db || "")}) and saved in S3 for the next view">Live from Athena</span>`;
 }
 function errorPage(p) {
   const run = p.run || "HI-Medium (current)";
@@ -5371,6 +5375,25 @@ function onRender(a) {
 window.addEventListener("message", e => { const d = e.data; if (d && d.type === "streamlit:render") onRender(d.args || {}); });
 ST.post("streamlit:componentReady", { apiVersion: 1 });
 ST.post("streamlit:setFrameHeight", { height: Math.max(600, (window.parent && window.parent.innerHeight) || 800) });
+/* Streamlit creates component frames with scrolling="no", which blocks scrolling the page.
+   Turn it back on; where a browser ignores that change, the body becomes the scroller instead. */
+(function enableScroll() {
+  let fe = null; try { fe = window.frameElement; } catch (e) {}
+  const on = () => { if (fe && fe.getAttribute("scrolling") !== "auto") fe.setAttribute("scrolling", "auto"); };
+  on();
+  if (fe && window.MutationObserver) new MutationObserver(on).observe(fe, { attributes: true, attributeFilter: ["scrolling"] });
+  setTimeout(() => {
+    const se = document.scrollingElement || document.documentElement;
+    if (se.scrollHeight <= innerHeight + 2) return setTimeout(enableScroll.check, 1500);
+    enableScroll.check();
+  }, 400);
+  enableScroll.check = () => {
+    const se = document.scrollingElement || document.documentElement, y = se.scrollTop;
+    se.scrollTop = y + 1;
+    if (se.scrollTop === y && se.scrollHeight > innerHeight + 2) document.documentElement.classList.add("inner-scroll");
+    else se.scrollTop = y;
+  };
+})();
 
 </script>
 </body>
