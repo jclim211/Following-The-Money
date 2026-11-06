@@ -1,0 +1,121 @@
+bank_id,bank_name,country,total_txns,n_accounts
+13960,First Bank,US,7135,1058
+6775,Future Savings Bank,Japan,7984,1289
+17428,Harbor Trust,Mexico,970,185
+18841,Northwind Bank,Spain,4113,536
+20570,Bank of Pine,Brazil,24755,3009
+7335,Atlas Credit,UK,7210,1773
+24202,Meridian Bank,US,9200,2414
+14306,Granite Savings,Germany,5289,1442
+24916,Bluewater Bank,US,45841,5168
+27457,Summit Bank,Germany,7896,917
+19290,Oak Union,Australia,348,84
+11075,Cedar Capital,Switzerland,2919,335
+27281,Coastal Bank,Germany,472,116
+13955,Pioneer Trust,UK,111,23
+4636,Silverline Bank,Crypto,3708,624
+20729,Keystone Bank,Italy,59944,7065
+19799,First Bank #1,Crypto,8746,2701
+21218,Future Savings Bank #1,Netherlands,1445,300
+24163,Harbor Trust #1,Netherlands,2026,311
+8025,Northwind Bank #1,Canada,44225,13018
+3254,Bank of Pine #1,Brazil,10314,2338
+13996,Atlas Credit #1,Switzerland,8758,1517
+2751,Meridian Bank #1,Italy,7528,913
+15281,Granite Savings #1,Canada,8633,1146
+15244,Bluewater Bank #1,France,27172,3412
+6738,Summit Bank #1,Australia,18611,2464
+19886,Oak Union #1,US,11248,1557
+15397,Cedar Capital #1,Italy,1745,220
+8978,Coastal Bank #1,Netherlands,17492,2472
+24414,Pioneer Trust #1,Australia,2953,403
+5588,Silverline Bank #1,UK,41854,8706
+14197,Keystone Bank #1,India,1254,318
+11450,First Bank #2,China,6641,885
+28162,Future Savings Bank #2,Brazil,8064,2023
+7979,Harbor Trust #2,Japan,1161,141
+17947,Northwind Bank #2,Crypto,107304,16312
+15416,Bank of Pine #2,Germany,72496,14572
+363,Atlas Credit #2,France,4092,479
+18618,Meridian Bank #2,UK,25835,6577
+29021,Granite Savings #2,US,14349,2362
+11630,Bluewater Bank #2,UK,210,64
+18379,Summit Bank #2,Australia,11846,1352
+3441,Oak Union #2,India,7440,1158
+23715,Cedar Capital #2,US,9230,1185
+4245,Coastal Bank #2,Switzerland,1661,359
+29779,Pioneer Trust #2,Spain,5459,703
+10837,Silverline Bank #2,Switzerland,6251,871
+12033,Keystone Bank #2,Japan,48203,7029
+20953,First Bank #3,UK,13431,1548
+10221,Future Savings Bank #3,Crypto,8085,1448
+3938,Harbor Trust #3,Spain,80344,14638
+29742,Northwind Bank #3,Japan,3573,504
+21789,Bank of Pine #3,Japan,4568,575
+17264,Atlas Credit #3,US,581,120
+11388,Meridian Bank #3,US,85326,12163
+16560,Granite Savings #3,France,34473,8108
+22234,Bluewater Bank #3,Mexico,32107,5093
+24653,Summit Bank #3,India,22150,2913
+20448,Oak Union #3,Brazil,9608,2837
+1786,Cedar Capital #3,US,11245,1531
+14946,Coastal Bank #3,Australia,5602,1816
+11772,Pioneer Trust #3,Mexico,6020,692
+7629,Silverline Bank #3,Canada,8840,1525
+26413,Keystone Bank #3,Netherlands,78306,14361
+21518,First Bank #4,Australia,18698,2558
+17286,Future Savings Bank #4,US,7472,1221
+10209,Harbor Trust #4,US,3447,471
+24487,Northwind Bank #4,US,3175,909
+25660,Bank of Pine #4,UK,89734,14077
+5770,Atlas Credit #4,UK,17377,2742
+4513,Meridian Bank #4,US,9017,1054
+13316,Granite Savings #4,Switzerland,4870,1509
+167,Bluewater Bank #4,US,1585,282
+26813,Summit Bank #4,Switzerland,7379,1092
+6450,Oak Union #4,US,30096,4778
+3569,Cedar Capital #4,China,4547,1324
+6016,Coastal Bank #4,US,5812,891
+13220,Pioneer Trust #4,UK,5866,1358
+24553,Silverline Bank #4,Australia,9600,2305
+18334,Keystone Bank #4,Netherlands,792,100
+1271,First Bank #5,India,5742,1376
+8333,Future Savings Bank #5,Japan,2299,406
+16225,Harbor Trust #5,Switzerland,30592,4082
+15997,Northwind Bank #5,US,2600,363
+19175,Bank of Pine #5,Switzerland,19305,3059
+29360,Atlas Credit #5,US,79800,10180
+28911,Meridian Bank #5,Mexico,5112,887
+17939,Granite Savings #5,Crypto,3336,501
+121,Bluewater Bank #5,India,10848,1375
+18503,Summit Bank #5,US,8128,1154
+26113,Oak Union #5,Germany,1875,278
+1077,Cedar Capital #5,UK,16227,2989
+14882,Coastal Bank #5,US,166637,26247
+1669,Pioneer Trust #5,Japan,5551,1037
+26379,Silverline Bank #5,Mexico,6027,812
+1324,Keystone Bank #5,UK,1740,334
+15095,First Bank #6,Canada,13127,2268
+18682,Future Savings Bank #6,Mexico,1298,177
+2919,Harbor Trust #6,US,1590,269
+28235,Northwind Bank #6,Mexico,55293,11001
+9068,Bank of Pine #6,Canada,2133,272
+15226,Atlas Credit #6,US,41079,7776
+26124,Meridian Bank #6,Switzerland,79790,9894
+25289,Granite Savings #6,Japan,12006,1561
+8528,Bluewater Bank #6,Switzerland,18634,3283
+25388,Summit Bank #6,US,151555,20830
+4802,Oak Union #6,China,6082,1901
+23184,Cedar Capital #6,Japan,3379,637
+29621,Coastal Bank #6,India,1114,141
+29589,Pioneer Trust #6,Mexico,8676,1344
+29928,Silverline Bank #6,Germany,74562,11752
+11365,Keystone Bank #6,Brazil,34229,4902
+23832,First Bank #7,Canada,2022,291
+9694,Future Savings Bank #7,Canada,2296,358
+24868,Harbor Trust #7,US,3853,702
+7419,Northwind Bank #7,US,12611,3080
+14653,Bank of Pine #7,Japan,6005,1267
+17703,Atlas Credit #7,UK,11227,2364
+21598,Meridian Bank #7,Switzerland,12696,2278
+29043,Granite Savings #7,Australia,5226,586
