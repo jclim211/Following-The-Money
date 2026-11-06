@@ -3324,6 +3324,22 @@ body.loading { overflow: hidden; }
 .navhandle:hover .ic, .navhandle:focus-visible .ic { transform: translateX(7px); }
 .mnode:hover circle:not(.mhalo), .mnode.on circle:not(.mhalo) { transform: scale(1.18); }
 
+/* summary: one screen */
+.sumrow { margin-top: var(--ds-space-150); }
+.sumrow .card { padding-block: var(--ds-space-150); }
+.sumrow .sum-h { margin-bottom: var(--ds-space-100); }
+.sumrow .sum-h h3 { font: var(--ds-font-heading-xsmall); }
+.sumrow .sum-h p { font: var(--ds-font-body-small); }
+.sumrow .sumlist li { grid-template-columns: 22px minmax(0, 1fr) auto; grid-template-areas: "rk nm vl" "rk br br"; row-gap: 4px; padding-block: var(--ds-space-050); }
+.sumrow .sumlist li.act { grid-template-columns: 22px minmax(0, 1fr) auto 16px; grid-template-areas: "rk nm vl ch" "rk br br ch"; }
+.sumrow .sumlist .rk { grid-area: rk; }
+.sumrow .sumlist .nm { grid-area: nm; min-width: 0; }
+.sumrow .sumlist .vl { grid-area: vl; }
+.sumrow .sumlist .br { grid-area: br; height: 6px; }
+.sumrow .sumlist li > .ic { grid-area: ch; }
+.sumrow .sumlist .nm b, .sumrow .sumlist .nm small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.heads .card.head { padding-block: var(--ds-space-150); }
+
 .errbox { display: flex; gap: var(--ds-space-200); align-items: flex-start; margin-top: var(--ds-space-300); padding: var(--ds-space-200) var(--ds-space-300); border-radius: var(--ds-radius-large); background: var(--ds-background-danger-subtler, var(--ds-background-danger)); color: var(--ds-text); }
 .errbox > .ic { width: 20px; height: 20px; color: var(--ds-icon-danger); flex: none; margin-top: 2px; }
 .errbox h3 { font: var(--ds-font-heading-small); margin: 0 0 var(--ds-space-050); }
@@ -3948,13 +3964,7 @@ function bq2Page(p) {
   <div class="hero"><div><h1 class="sm">How do laundering networks move funds across banks?</h1>
     <p>Clean ${esc(DATA.meta.dataset)} transactions ${esc(DATA.meta.first_day)} to ${esc(DATA.meta.last_day)}, plus the ${fmt(k.schemes)} laundering schemes reconstructed from Patterns.txt.</p>
     <div class="actions">${runPicker(p)}${srcBadge()}</div></div>${art("network", "sm")}</div>
-  <div class="grid g4">
-    ${metricCard("Laundering transactions", fmt(k.laundering), "In the clean data", "launder")}
-    ${metricCard("Normal transactions", fmt(k.normal), "In the clean data", "normal")}
-    ${metricCard("Reconstructed schemes", fmt(k.schemes), "From Patterns.txt", "schemes")}
-    ${metricCard("Laundering covered by schemes", pct(k.in_clean / k.laundering), `${fmt(k.in_clean)} scheme transfers match a laundering transaction`, "cover")}
-  </div>
-  <div style="margin-top:var(--ds-space-400)"><div class="tabs" role="tablist" aria-label="BQ2 views">
+  <div style="margin-top:var(--ds-space-300)"><div class="tabs" role="tablist" aria-label="BQ2 views">
     ${TABS.map(([id, label, icon]) => `<button class="tab" role="tab" id="tab-${id}" aria-controls="panel" aria-selected="${id === currentTab}" data-tab="${id}">${ic(icon)}${label}</button>`).join("")}
   </div><div class="tabpanel" id="panel" role="tabpanel"></div></div>`;
   return html;
@@ -4004,15 +4014,23 @@ function flowTip(rows) {
       [["Transactions, laundering", fmt(r.l_tx)], ["Transactions, normal", fmt(r.n_tx)], ["Median USD, laundering", r.l_usd != null ? usd(r.l_usd) : "-"], ["Median USD, normal", r.n_usd != null ? usd(r.n_usd) : "-"]]);
   };
 }
+const NOT_SENT = "Not sent on";
 function flowTab(panel) {
   const hold = DATA.hold, buckets = [...new Set(hold.map(h => h.bucket))];
   const holdRows = buckets.map(b => { const l = hold.find(h => h.bucket === b && h.grp === "laundering"), n = hold.find(h => h.bucket === b && h.grp === "normal"); return { cat: b, order: l.bucket_order, laundering: l.share, normal: n.share, l_n: l.n, n_n: n.n }; });
   const holdRanked = [...holdRows].sort((a, b) => b.laundering - a.laundering).map(r => r.cat);
-  const g = grp => { const h = hold.filter(x => x.grp === grp); return { moved: 1 - h.find(x => x.bucket === "never").share, med: h[0].median_hold_minutes / 60 }; };
+  const g = grp => { const h = hold.filter(x => x.grp === grp); return { moved: 1 - h.find(x => x.bucket === NOT_SENT).share, med: h[0].median_hold_minutes / 60 }; };
   const L = g("laundering"), N = g("normal");
 
   const cf = (id, label, body) => `<div class="cf"><div class="cf-filter" id="f-${id}"><div class="flabel">${ic("filter")}${label}</div><div id="m-${id}"></div></div><div class="cf-body">${body}</div></div>`;
+  const k = DATA.kpi;
   panel.innerHTML = `
+  <div class="grid g4" style="margin-bottom:var(--ds-space-400)">
+    ${metricCard("Laundering transactions", fmt(k.laundering), "In the clean data", "launder")}
+    ${metricCard("Normal transactions", fmt(k.normal), "In the clean data", "normal")}
+    ${metricCard("Reconstructed schemes", fmt(k.schemes), "From Patterns.txt", "schemes")}
+    ${metricCard("Laundering covered by schemes", pct(k.in_clean / k.laundering), `${fmt(k.in_clean)} scheme transfers match a laundering transaction`, "cover")}
+  </div>
     <div class="section-h" style="margin-top:0"><div><h2><span class="h-art">${art("share", "mini")}</span>Share of transactions, laundering vs normal</h2>
       <p>Each bar is the share within its group. Every chart starts with the 3 values laundering uses most; change them in the filter on the left of each chart.</p></div>
       <div class="legend"><span><i class="sw-l"></i>Laundering</span><span><i class="sw-n"></i>Normal</span></div></div>
@@ -4030,7 +4048,7 @@ function flowTab(panel) {
               <div class="metric">${spot("hold", "sm")}<div><div class="label">Median hold</div><div class="value md num">${v.med.toFixed(1)} h</div><div class="note">Before it is sent on</div></div></div>
             </div></div>`).join("")}
         </div></div>
-      <p class="caption">Same-minute outgoing transfers count as sending the money on. The next outgoing transfer can be any transfer of that account, not necessarily laundering. "Never" is partly because the data ends on ${esc(DATA.meta.last_day)}.</p></section>
+      <p class="caption">Same-minute outgoing transfers count as sending the money on. The next outgoing transfer can be any transfer of that account, not necessarily laundering. <b>Not sent on</b> (the "never" bucket in Athena): the account received the money but made no outgoing transfer before the data ends on ${esc(DATA.meta.last_day)}. Some of it may simply be sent on after that date.</p></section>
 
     <section class="section"><div class="section-h"><div><h2><span class="h-art">${art("schemes", "mini")}</span>Scheme types</h2><p>Transfers, banks and countries per scheme.</p></div></div>
       <div class="card"><div class="card-h"><h3>Types in the reconstructed schemes</h3><p id="s-types"></p></div>${cf("types", "Scheme types shown", `<div id="t-types" class="tbl-wrap"></div>`)}</div>
@@ -5208,34 +5226,19 @@ function summaryTab(panel) {
       <span class="br"><i class="${opts.cls || "q-s"}" style="width:${Math.max(3, 100 * r.v / max).toFixed(1)}%"></i></span><span class="vl num">${r.val}</span>${r.act ? ic("chevron-right") : ""}</li>`).join("")}</ol></div>`;
 
   const l0 = flow[0], r0 = rateTop[0], e0 = entryTop[0], b0 = banksTop[0];
-  panel.innerHTML = `<div class="section-h" style="margin-top:0"><div><h2><span class="h-art">${art("share", "mini")}</span>Summary: the top 5 from every tab</h2>
-      <p>Each list uses the same rules as its tab. Click a bank or a scheme to open it; "Open tab" goes to the full view.</p></div></div>
+  const t3 = a => a.slice(0, 3);
+  panel.innerHTML = `
     <div class="grid g4 heads">
       <div class="card head">${spot("launder")}<div><div class="label">Most used by laundering</div><div class="value md">${esc(l0.cat)}</div><div class="note">${pct(l0.laundering, 1)} of laundering vs ${pct(l0.normal, 1)} of normal</div></div></div>
       <div class="card head">${spot("routes")}<div><div class="label">Riskiest route</div><div class="value md">${esc(r0.from_country)} → ${esc(r0.to_country)}</div><div class="note">${rateFmt(r0.rate)} laundering, ${fmt(r0.total)} transactions</div></div></div>
       <div class="card head">${spot("bankflow")}<div><div class="label">Most over-represented entry bank</div><div class="value md">${esc(e0.bank_name)}</div><div class="note">${e0.entry_ratio.toFixed(1)}× the entries its size predicts</div></div></div>
       <div class="card head">${spot("schemes")}<div><div class="label">Bank in the most schemes</div><div class="value md">${esc(SX.name(b0.b))}</div><div class="note">${b0.n} of ${fmt(Object.keys(SX.PROF).length)} schemes</div></div></div>
     </div>
-    <h3 class="sumgrp">${ic("chart-bar")}Laundering vs normal</h3>
-    <div class="grid g3">
-      ${card("share", "Payment formats used by laundering", "Share of laundering transactions; normal share below", "flow", flow.map(r => ({ name: esc(r.cat), sub: `Normal ${pct(r.normal, 1)}`, v: r.laundering, val: pct(r.laundering, 1) })), Math.max(...flow.map(r => r.laundering)), { cls: "b-l" })}
-      ${card("hold", "Holding time before money moves on", "Share of laundering transfers; normal share below", "flow", holdTop.map(r => ({ name: esc(r.b), sub: `Normal ${pct(r.n, 1)}`, v: r.l, val: pct(r.l, 1) })), Math.max(...holdTop.map(r => r.l)), { cls: "b-l" })}
-      ${card("schemes", "Scheme types", "Number of reconstructed schemes", "flow", types.map(t => ({ name: esc(t.scheme_type), sub: `${t.avg_transfers.toFixed(1)} transfers, median ${usd(t.median_usd)}`, v: t.schemes, val: fmt(t.schemes) })), types[0].schemes)}
-    </div>
-    <h3 class="sumgrp">${ic("globe")}Country routes</h3>
-    <div class="grid g2">
-      ${card("routes", "Highest laundering rate", "Routes with at least 30 transactions", "country", rateTop.map(p => ({ name: `${esc(p.from_country)} → ${esc(p.to_country)}`, sub: `${fmt(p.n_laundering)} of ${fmt(p.total)} transactions`, v: p.rate, val: rateFmt(p.rate) })), rateTop[0].rate, { cls: "b-l" })}
-      ${card("senton", "Most laundering transactions", "All routes, by count", "country", busy.map(p => ({ name: `${esc(p.from_country)} → ${esc(p.to_country)}`, sub: `${rateFmt(p.rate)} of the route's transactions`, v: p.n_laundering, val: fmt(p.n_laundering) })), busy[0].n_laundering, { cls: "b-l" })}
-    </div>
-    <h3 class="sumgrp">${ic("office-building")}Entry and exit banks</h3>
-    <div class="grid g2">
-      ${card("bankflow", "Over-represented entry banks", "Actual entries ÷ what the bank's size predicts", "bank", entryTop.map(b => ({ name: esc(b.bank_name), sub: `${esc(b.country)} · ${b.entries} entries, ${b.expected_entries.toFixed(1)} expected`, v: b.entry_ratio, val: b.entry_ratio.toFixed(1) + "×", act: "bank:" + b.bank_id })), entryTop[0].entry_ratio, { cls: "b-l" })}
-      ${card("bankflow", "Over-represented exit banks", "Actual exits ÷ what the bank's size predicts", "bank", exitTop.map(b => ({ name: esc(b.bank_name), sub: `${esc(b.country)} · ${b.exits} exits, ${b.expected_exits.toFixed(1)} expected`, v: b.exit_ratio, val: b.exit_ratio.toFixed(1) + "×", act: "bank:" + b.bank_id })), exitTop[0].exit_ratio, { cls: "b-l" })}
-    </div>
-    <h3 class="sumgrp">${ic("branch")}Scheme explorer</h3>
-    <div class="grid g2">
-      ${card("schemes", "Banks in the most schemes", "All scheme types", "schemes", banksTop.map(s => ({ name: esc(SX.name(s.b)), sub: `${esc(SX.country(s.b))} · ${s.en} in, ${s.ex} out · ${ROLE[s.role][0]}`, v: s.n, val: `${s.n} schemes`, act: "bank:" + s.b })), banksTop[0].n)}
-      ${card("value", "Largest schemes", "By total USD moved", "schemes", bigSch.map(p => ({ name: `#${p.scheme_id} ${esc(p.scheme_type)}`, sub: `${p.n_transfers} transfers · ${p.n_banks} banks · ${hours(p.duration_hours)}`, v: p.total_usd, val: money(p.total_usd), act: "scheme:" + p.scheme_id })), bigSch[0].total_usd)}
+    <div class="grid g4 sumrow">
+      ${card("share", "Payment formats", "Laundering share", "flow", t3(flow).map(r => ({ name: esc(r.cat), sub: `Normal ${pct(r.normal, 1)}`, v: r.laundering, val: pct(r.laundering, 1) })), flow[0].laundering, { cls: "b-l" })}
+      ${card("routes", "Riskiest routes", "Laundering rate (30+ txns)", "country", t3(rateTop).map(p => ({ name: `${esc(p.from_country)} → ${esc(p.to_country)}`, sub: `${fmt(p.n_laundering)} of ${fmt(p.total)}`, v: p.rate, val: rateFmt(p.rate) })), rateTop[0].rate, { cls: "b-l" })}
+      ${card("bankflow", "Entry banks", "Entries vs size", "bank", t3(entryTop).map(b => ({ name: esc(b.bank_name), sub: `${esc(b.country)} · ${b.entries} entries`, v: b.entry_ratio, val: b.entry_ratio.toFixed(1) + "×", act: "bank:" + b.bank_id })), entryTop[0].entry_ratio, { cls: "b-l" })}
+      ${card("bankflow", "Exit banks", "Exits vs size", "bank", t3(exitTop).map(b => ({ name: esc(b.bank_name), sub: `${esc(b.country)} · ${b.exits} exits`, v: b.exit_ratio, val: b.exit_ratio.toFixed(1) + "×", act: "bank:" + b.bank_id })), exitTop[0].exit_ratio, { cls: "b-l" })}
     </div>`;
   $$("[data-sgo]", panel).forEach(b => b.addEventListener("click", () => $(`[data-tab="${b.dataset.sgo}"]`).click()));
   $$("[data-act]", panel).forEach(li => {
@@ -5359,6 +5362,7 @@ function onRender(a) {
   if (p.kind !== "home") {
     Object.keys(DATA).forEach(k => { if (k !== "runs") delete DATA[k]; });
     Object.assign(DATA, a.data || { error: "No data came back for this page." });
+    (DATA.hold || []).forEach(h => { if (h.bucket === "never") h.bucket = NOT_SENT; });
     SX = null; BQ = null; Object.keys(STATE).forEach(k => delete STATE[k]);
   } else if (ST.shown === "home") { hideLoader(); return; }   // home is drawn locally, nothing to redo
   currentPath = path; ST.shown = path;
