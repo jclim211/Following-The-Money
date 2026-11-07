@@ -1,0 +1,28 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ReadRuns",
+            "Effect": "Allow",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::is459-g7-projectbucket/runs/*"
+        },
+        {
+            "Sid": "ReadRunCatalog",
+            "Effect": "Allow",
+            "Action": [
+                "glue:GetDatabase",
+                "glue:GetTable",
+                "glue:GetTables",
+                "glue:GetPartition",
+                "glue:GetPartitions",
+                "glue:BatchGetPartition"
+            ],
+            "Resource": [
+                "arn:aws:glue:us-east-1:761018854594:catalog",
+                "arn:aws:glue:us-east-1:761018854594:database/aml_hi_*",
+                "arn:aws:glue:us-east-1:761018854594:table/aml_hi_*/*"
+            ]
+        }
+    ]
+}
