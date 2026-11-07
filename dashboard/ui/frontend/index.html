@@ -4243,20 +4243,21 @@ function pipeInner() {
 function drawPipe() {
   const box = $("#pipeBox"); if (!box) return;
   const code = $("#pipeCode"); if (code) ST.pipeCode = code.value;
-  box.innerHTML = pipeInner();
-  rebob(box);
+  const html = pipeInner();
+  if (html !== box.dataset.html) { box.innerHTML = html; box.dataset.html = html; rebob(box); }
   schedulePoll();
 }
-/* Auto-refresh the home page: every 15 s while a run is going, otherwise every minute.
-   A finished run then leaves the upload cards and appears in step 1 without a reload. */
+/* Auto-refresh the home page: every 10 s while a run is going, otherwise every minute.
+   A finished run then leaves the upload cards and appears in step 1 without a reload.
+   The pipeline popup keeps refreshing while it is open; other popups pause it. */
 function schedulePoll() {
   clearTimeout(ST.pipeTimer);
   const busy = (ST.pipe && ST.pipe.uploads || []).some(u => u.status === "running" || u.status === "succeeded");
   ST.pipeTimer = setTimeout(() => {
     if (currentPath !== "home") return;
-    if (document.visibilityState === "hidden" || MODALS.length) return schedulePoll();
+    if (document.visibilityState === "hidden" || MODALS.some(w => w.dataset.key !== "flow")) return schedulePoll();
     ST.send({ path: "home", n: ++ST.n, action: "poll" });
-  }, busy ? 15000 : 60000);
+  }, busy || FLOWM ? 10000 : 60000);
 }
 document.addEventListener("click", e => {
   const s = e.target.closest("[data-start]");
@@ -4360,12 +4361,12 @@ const stateIcon = s => s.state === "running" ? `<span class="spin" aria-hidden="
   : ic({ done: "check-circle", failed: "cross-circle", cancelled: "cross-circle", skipped: "minus" }[s.state] || "clock");
 
 /* Upload card: only the icons of the step(s) running now (they float); a click opens that step in the pipeline */
-const bob = () => `--bdl:-${(Math.random() * 3).toFixed(2)}s`;  // a slow float up and down, each icon a little out of step
+const bob = (seed = "") => { let h = 0; for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `--bdl:-${(h % 300 / 100).toFixed(2)}s`; };  // a slow float up and down, each icon a little out of step
 function rebob() {}
 function nowBox(u) {
   const f = flowFor(u.run); if (!f) return "";
   const S = flowStats(f), track = `<div class="track" aria-hidden="true">${FORDER.map(k => `<i class="is-${fstep(f, k).state}"></i>`).join("")}</div>`;
-  const tile = (k, run) => `<button class="nowi" data-flow="${esc(u.run)}" data-node="${k}" aria-label="Open ${esc(FSTEPS[k].name)} in the pipeline"><span class="bob"${run ? ` style="${bob()}"` : ""}>${aws(FSTEPS[k].svc, "lg", true)}</span></button>`;
+  const tile = (k, run) => `<button class="nowi" data-flow="${esc(u.run)}" data-node="${k}" aria-label="Open ${esc(FSTEPS[k].name)} in the pipeline"><span class="bob"${run ? ` style="${bob(u.run + k)}"` : ""}>${aws(FSTEPS[k].svc, "lg", true)}</span></button>`;
   if (u.status === "failed") {
     const k = S.failed[0]; if (!k) return "";
     return `<div class="now fail"><div class="now-l"><span class="now-tag"><i></i>Failed at step ${FORDER.indexOf(k) + 1} of 12</span>${SAMPLE}</div><div class="nowis">${tile(k, false)}</div>${track}</div>`;
@@ -4377,7 +4378,7 @@ function nowBox(u) {
 /* The flow popup: just the pipeline as icons. A step's name and details appear only when it is clicked. */
 function pnode(f, k, picked) {
   const d = FSTEPS[k], s = fstep(f, k);
-  return `<button class="pnode is-${s.state}" data-node="${k}" aria-pressed="${k === picked}" aria-label="${esc(d.name)}, ${FSTATE[s.state][1]}"><span class="bob"${s.state === "running" ? ` style="${bob()}"` : ""}>${aws(d.svc, "xl", true)}</span><span class="pb">${stateIcon(s)}</span></button>`;
+  return `<button class="pnode is-${s.state}" data-node="${k}" aria-pressed="${k === picked}" aria-label="${esc(d.name)}, ${FSTATE[s.state][1]}"><span class="bob"${s.state === "running" ? ` style="${bob(f.run + k)}"` : ""}>${aws(d.svc, "xl", true)}</span><span class="pb">${stateIcon(s)}</span></button>`;
 }
 const pc = st => `<i class="pc is-${st}" aria-hidden="true"></i>`;
 function flowGraph(f, picked) {
@@ -4412,12 +4413,13 @@ function flowDetail(f, k) {
       ${s.error ? `<div class="errbox" role="alert">${ic(s.state === "cancelled" ? "warning" : "cross-circle")}<div><h3>${s.state === "cancelled" ? "Stopped" : "Error"}</h3><pre>${esc(s.error)}</pre></div></div>` : ""}${act}</div>
     <table class="dt facts"><tbody>${rows.map(([a, b]) => `<tr><td class="muted">${a}</td><td>${b}</td></tr>`).join("")}</tbody></table></div>`;
 }
+let FLOWM = null;  // the open pipeline popup: {run, redraw}
+const flowSub = f => { const [tone, label] = RSTATE[f.status] || ["neutral", f.status]; return `<span class="lozenge ${tone}">${label}</span><span>${esc(f.dataset)} dataset</span>${SAMPLE}`; };
 function flowModal(run, first) {
-  const f = flowFor(run); if (!f) return;
-  const [tone, label] = RSTATE[f.status] || ["neutral", f.status];
+  let f = flowFor(run); if (!f) return;
   let picked = null;
   const html = `<header class="modal-h">${aws("sfn", "lg")}<div class="mh-t"><h2>Pipeline for ${esc(run)}</h2>
-      <p><span class="lozenge ${tone}">${label}</span><span>${esc(f.dataset)} dataset</span>${SAMPLE}</p></div>
+      <p id="fSub">${flowSub(f)}</p></div>
     <div class="mh-a"><button class="btn subtle icon-only" data-close aria-label="Close">${ic("cross")}</button></div></header>
   <div class="modal-b"><p class="fhint">${ic("information-circle")}Select an icon to see the step.</p>
     <div class="fwrap" id="fWrap">${flowGraph(f, null)}<div id="fAside"></div></div></div>`;
@@ -4436,6 +4438,17 @@ function flowModal(run, first) {
     if (g) { if (g.dataset.jobOpen) sparkJob = g.dataset.jobOpen; if (MODALS.length) closeModal(MODALS[0].dataset.key, true); }
   });
   if (first && FSTEPS[first]) show(first);
+  FLOWM = { run, redraw() {
+    const nf = flowFor(run); if (!nf) return;
+    f = nf;
+    const g = flowGraph(f, picked), old = $(".pflow", modal);
+    if (old && old.dataset.html !== g) { old.outerHTML = g; const n = $(".pflow", modal); n.dataset.html = g; rebob(modal); }
+    $("#fSub", modal).innerHTML = flowSub(f);
+    const d = $("#fAside .fdetail", modal); if (d && picked) d.innerHTML = flowDetail(f, picked);
+  } };
+  $(".pflow", modal).dataset.html = flowGraph(f, picked);
+  ONCLOSE.flow = () => { FLOWM = null; };
+  schedulePoll();
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-flow]"); if (b) { e.preventDefault(); flowModal(b.dataset.flow, b.dataset.node); } });
 
@@ -5916,6 +5929,7 @@ function onRender(a) {
   ST.runsSig = runsSig;
   if (ST.shown === "home" && !a.pending) {   // the upload list and run list refresh without redrawing home
     drawPipe();
+    if (FLOWM) FLOWM.redraw();
     const box = $("#runsBox"); if (runsChanged && box) { box.innerHTML = runsBox(); wireRuns(); }
   }
   const path = BY_PATH[a.path] ? a.path : "home", p = BY_PATH[path];
