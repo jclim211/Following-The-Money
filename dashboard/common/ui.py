@@ -51,6 +51,11 @@ def page():
     box = st.container(key="ftm_box")    # the component; kept on screen while the next data loads
     work = st.container(key="ftm_work")  # hidden: anything Streamlit shows while loading goes here
 
+    nav = st.session_state.get(KEY)
+    if (isinstance(nav, dict) and nav.get("n", 0) != st.session_state.get("ftm_n", 0)
+            and nav.get("action") in ("refresh", "poll")):
+        list_runs.clear()  # a run that just finished moves from the upload cards to the run list
+        list_uploads.clear()
     try:
         runs, runs_error = list_runs(), ""
     except Exception as err:  # the original HI-Medium dashboards still work without the run list
@@ -68,7 +73,6 @@ def page():
                     ok, msg = False, f"Could not start the run: {str(err)[:300]}"
             st.session_state["ftm_pipe_msg"] = {"ok": ok, "text": msg, "run": nav.get("run"), "n": handled}
         elif nav.get("action") == "refresh":
-            list_uploads.clear()
             st.session_state.pop("ftm_pipe_msg", None)
     else:
         path = st.query_params.get("view", "home")
