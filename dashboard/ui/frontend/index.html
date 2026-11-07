@@ -3557,6 +3557,209 @@ table.dt { width: 100%; border-collapse: collapse; font: var(--ds-font-body); }
 .modal.pick .feature .body { padding: var(--ds-space-300) var(--ds-space-400) var(--ds-space-400); }
 .modal.pick .feature h3 { font-size: 1.5rem; line-height: 1.25; }
 @media (prefers-reduced-motion: reduce) { .runs .runcard { transition: none; } .upcard .pbar span { animation: none; width: 100%; } }
+/* ===== Pipeline view (MOCK, sample data): service icon tiles, live step, flow popup, Spark jobs page ===== */
+/* AWS service glyphs on ADS icon tiles: S3 lime, Step Functions magenta, the analytics services purple */
+.aws { --sz: 32px; width: var(--sz); height: var(--sz); flex: none; display: inline-grid; place-items: center; border-radius: var(--ds-radius-medium); background: var(--tile-bg); color: var(--tile-fg); transition: background-color var(--ds-duration-short) var(--ds-easing-out-practical), color var(--ds-duration-short) var(--ds-easing-out-practical); }
+.aws svg { width: 72%; height: 72%; display: block; }
+.aws.lime { --tile-bg: var(--ds-background-accent-lime-subtler); --tile-fg: var(--ds-icon-accent-lime); }
+.aws.magenta { --tile-bg: var(--ds-background-accent-magenta-subtler); --tile-fg: var(--ds-icon-accent-magenta); }
+.aws.purple { --tile-bg: var(--ds-background-accent-purple-subtler); --tile-fg: var(--ds-icon-accent-purple); }
+.aws.xs { --sz: 20px; border-radius: var(--ds-radius-small); } .aws.xs svg { stroke-width: 2.8; }
+.aws.sm { --sz: 24px; border-radius: var(--ds-radius-small); } .aws.sm svg { stroke-width: 2.6; }
+.aws.lg { --sz: 40px; border-radius: var(--ds-radius-large); }
+.aws.xl { --sz: 48px; border-radius: var(--ds-radius-large); } .aws.xl svg { stroke-width: 1.8; }
+.sample { cursor: help; }
+/* running upload card: the step that is running now */
+.now { display: grid; gap: var(--ds-space-100); padding: var(--ds-space-150); border-radius: var(--ds-radius-large); background: var(--ds-surface-sunken); }
+.now-l { display: flex; justify-content: space-between; align-items: center; gap: var(--ds-space-100); font: var(--ds-font-body-small); color: var(--ds-text-subtle); }
+.now-tag { display: inline-flex; align-items: center; gap: var(--ds-space-075); font-weight: var(--ds-font-weight-bold); color: var(--ds-text-discovery); }
+.now-tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--ds-icon-discovery); animation: ftm-ping 1.6s ease-out infinite; }
+@keyframes ftm-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ds-icon-discovery) 55%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
+.now-s { display: flex; align-items: center; gap: var(--ds-space-100); min-width: 0; }
+.now-s .t { flex: 1; min-width: 0; display: grid; }
+.now-s b { font: var(--ds-font-body); font-weight: var(--ds-font-weight-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-s .t span { font: var(--ds-font-body-small); color: var(--ds-text-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now.fail { background: var(--ds-background-danger-subtler); }
+.now.fail .now-tag { color: var(--ds-text-danger-bolder, var(--ds-text-danger)); }
+.now.fail .now-tag i { background: var(--ds-icon-danger); animation: none; }
+.track { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; }
+.track i { position: relative; height: 6px; border-radius: 2px; background: var(--ds-background-neutral); overflow: hidden; }
+.track i.is-done { background: var(--ds-background-success-bold); }
+.track i.is-running { background: color-mix(in srgb, var(--ds-background-discovery-bold) 35%, transparent); }
+.track i.is-running::after { content: ""; position: absolute; inset: 0; width: 60%; border-radius: inherit; background: var(--ds-background-discovery-bold); animation: ftm-slide 1.3s var(--ds-easing-in-out, ease-in-out) infinite; }
+@keyframes ftm-slide { from { transform: translateX(-100%); } to { transform: translateX(170%); } }
+.track i.is-failed { background: var(--ds-background-danger-bold); }
+.track i.is-cancelled { background: var(--ds-background-warning-bold); }
+.upcard .foot .btn-group { flex: none; }
+/* the flow popup: only the pipeline until a step is picked */
+.modal.flowm { width: min(1120px, 100%); }
+.modal.flowm code, .fdetail code, .jx code { font: var(--ds-font-code, .875em monospace); background: var(--ds-background-neutral); padding: 0 var(--ds-space-050); border-radius: var(--ds-radius-small); overflow-wrap: anywhere; }
+.fhint { display: flex; align-items: center; justify-content: center; gap: var(--ds-space-075); font: var(--ds-font-body-small); color: var(--ds-text-subtlest); margin-bottom: var(--ds-space-200); }
+.fwrap { display: grid; grid-template-columns: minmax(0, 560px) 0fr; justify-content: center; gap: 0; align-items: start; transition: grid-template-columns var(--ds-duration-medium, 240ms) var(--ds-easing-out-practical), gap var(--ds-duration-medium, 240ms); }
+.fwrap.open { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--ds-space-300); }
+.fwrap > aside { min-width: 0; overflow: hidden; }
+.fgraph, .fgraph ol { list-style: none; margin: 0; padding: 0; }
+.fgraph { display: grid; }
+.fstep { position: relative; padding-top: 16px; }
+.fgraph > .fstep:first-child, .flane ol > .fstep:first-child { padding-top: 0; }
+/* connectors: solid when done, moving dashes into the running step, faint dashes when waiting */
+.fstep::before { content: ""; position: absolute; left: 27px; top: 0; width: 2px; height: 16px; background: var(--ds-border); }
+.fgraph > .fstep:first-child::before, .flane ol > .fstep:first-child::before { display: none; }
+.fstep.is-done::before { background: var(--ds-border-success); }
+.fstep.is-failed::before { background: var(--ds-border-danger); }
+.fstep.is-pending::before, .fstep.is-skipped::before { background: repeating-linear-gradient(to bottom, var(--ds-border) 0 3px, transparent 3px 6px); }
+.fstep.is-running::before { background: repeating-linear-gradient(to bottom, var(--ds-border-discovery) 0 4px, transparent 4px 8px); background-size: 2px 8px; animation: ftm-march .5s linear infinite; }
+@keyframes ftm-march { from { background-position: 0 0; } to { background-position: 0 8px; } }
+.fnode { position: relative; overflow: hidden; width: 100%; display: flex; align-items: center; gap: var(--ds-space-150); padding: var(--ds-space-100) var(--ds-space-150) var(--ds-space-100) var(--ds-space-100); border-radius: var(--ds-radius-large); border: var(--ds-border-width) solid var(--ds-border); background: var(--ds-surface-raised, var(--ds-surface)); box-shadow: var(--ds-shadow-raised); text-align: start; color: var(--ds-text); cursor: pointer; font: inherit; transition: background-color var(--ds-duration-short) var(--ds-easing-out-practical), border-color var(--ds-duration-short) var(--ds-easing-out-practical); }
+.fnode:hover { background: var(--ds-surface-raised-hovered, var(--ds-background-neutral-subtle-hovered)); }
+.fnode:active { background: var(--ds-surface-raised-pressed, var(--ds-background-neutral-subtle-pressed)); }
+.fnode:focus-visible { outline: 2px solid var(--ds-border-focused); outline-offset: 2px; }
+.fnode[aria-pressed="true"] { border-color: var(--ds-border-selected); background: var(--ds-background-selected); box-shadow: inset 0 0 0 1px var(--ds-border-selected); }
+.fnode .fn-t { flex: 1; min-width: 0; display: grid; }
+.fnode .fn-t b { font: var(--ds-font-body); font-weight: var(--ds-font-weight-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fnode .fn-t small { font: var(--ds-font-body-small); color: var(--ds-text-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fnode .fn-s { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; }
+.fnode .fn-s .ic { width: 16px; height: 16px; }
+.is-done > .fnode .fn-s .ic { color: var(--ds-icon-success); }
+.is-failed > .fnode .fn-s .ic { color: var(--ds-icon-danger); }
+.is-cancelled > .fnode .fn-s .ic { color: var(--ds-icon-warning); }
+.is-pending > .fnode .fn-s .ic, .is-skipped > .fnode .fn-s .ic { color: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.is-pending > .fnode, .is-skipped > .fnode { background: transparent; box-shadow: none; border-style: dashed; }
+.is-pending > .fnode .aws, .is-skipped > .fnode .aws { --tile-bg: var(--ds-background-neutral); --tile-fg: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.is-pending > .fnode .fn-t b, .is-skipped > .fnode .fn-t b { color: var(--ds-text-subtle); font-weight: var(--ds-font-weight-regular, 400); }
+.is-failed > .fnode { border-color: var(--ds-border-danger); }
+.is-running > .fnode { border-color: var(--ds-border-discovery); }
+.is-running > .fnode[aria-pressed="true"] { background: var(--ds-background-discovery); box-shadow: inset 0 0 0 1px var(--ds-border-discovery); }
+/* a light sweep across the running step */
+.is-running > .fnode::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--ds-background-discovery-bold) 14%, transparent) 50%, transparent 70%); background-size: 250% 100%; animation: ftm-sweep 1.8s linear infinite; pointer-events: none; }
+@keyframes ftm-sweep { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+.is-running > .fnode .aws { animation: ftm-tile 1.6s var(--ds-easing-in-out, ease-in-out) infinite; }
+@keyframes ftm-tile { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tile-fg) 22%, transparent); } }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--ds-icon-discovery) 25%, transparent); border-top-color: var(--ds-icon-discovery); animation: ftm-spin .9s linear infinite; }
+@keyframes ftm-spin { to { transform: rotate(360deg); } }
+.fpar-box { border: var(--ds-border-width) dashed var(--ds-border); border-radius: var(--ds-radius-xlarge); padding: var(--ds-space-100) var(--ds-space-150) var(--ds-space-150); }
+.fpar.is-running .fpar-box { border-color: var(--ds-border-discovery); }
+.fpar-h { display: flex; align-items: center; gap: var(--ds-space-075); font: var(--ds-font-body-small); color: var(--ds-text-subtle); margin-bottom: var(--ds-space-100); }
+.fpar-lanes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ds-space-150); }
+.flane-h { font: var(--ds-font-body-small); font-weight: var(--ds-font-weight-bold); color: var(--ds-text-subtle); margin: 0 0 var(--ds-space-075) var(--ds-space-050); }
+.flane .fnode .fn-t small { display: none; }
+.flane .fnode { gap: var(--ds-space-100); }
+.fend { display: flex; align-items: center; gap: var(--ds-space-100); padding-left: 18px; font: var(--ds-font-body-small); color: var(--ds-text-subtle); }
+.fend .ic { width: 20px; height: 20px; }
+.fend.is-done .ic { color: var(--ds-icon-success); } .fend.is-failed .ic { color: var(--ds-icon-danger); } .fend.is-pending .ic { color: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.fdetail { position: sticky; top: 0; display: grid; gap: var(--ds-space-200); padding: var(--ds-space-250); border-radius: var(--ds-radius-xlarge); border: var(--ds-border-width) solid var(--ds-border); background: var(--ds-surface-raised, var(--ds-surface)); box-shadow: var(--ds-shadow-raised); animation: ftm-in .26s var(--ds-easing-out-practical, ease-out); }
+@keyframes ftm-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+.fd-h { display: flex; align-items: center; gap: var(--ds-space-150); }
+.fd-h > div { flex: 1; min-width: 0; }
+.fd-svc { font: var(--ds-font-body-small); color: var(--ds-text-subtle); }
+.fd-h h3 { font: var(--ds-font-heading-small); }
+.fd-what { font: var(--ds-font-body); color: var(--ds-text); }
+.fd-live { display: grid; gap: var(--ds-space-075); font: var(--ds-font-body-small); color: var(--ds-text-discovery); }
+.fd-live .pbar { height: 4px; border-radius: var(--ds-radius-full); background: var(--ds-background-neutral); overflow: hidden; }
+.fd-live .pbar span { display: block; height: 100%; width: 35%; border-radius: inherit; background: var(--ds-background-discovery-bold); animation: ftm-pbar 1.6s ease-in-out infinite; }
+.fdetail .errbox { margin: 0; }
+.fdetail .dt { min-width: 0; width: 100%; }
+.fdetail .dt td:first-child { width: 36%; }
+.fd-a { display: flex; gap: var(--ds-space-100); flex-wrap: wrap; align-items: center; }
+.fd-a .sub { font: var(--ds-font-body-small); color: var(--ds-text-subtle); }
+.btn[disabled] { opacity: .55; cursor: not-allowed; }
+/* third card in the run popup */
+.awsart { display: flex; align-items: center; gap: 8px; }
+.awsart > i { width: 16px; border-top: 2px dashed var(--ds-border-bold); }
+.awsart .aws { --sz: 44px; border-radius: var(--ds-radius-large); }
+.modal.pick .grid.g3 { gap: var(--ds-space-300); }
+.modal.pick .grid.g3 .feature .body { padding: var(--ds-space-250) var(--ds-space-300) var(--ds-space-300); }
+.modal.pick .grid.g3 .feature h3 { font-size: 1.25rem; }
+.modal.pick .grid.g3 .feature .panel .art { width: 200px; }
+/* Spark jobs page: the five jobs on one time axis, details only after a click */
+.jl { display: grid; }
+.jl-axis, .jrow { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) 24px; gap: var(--ds-space-200); align-items: center; }
+.jl-axis { height: 24px; }
+.jl-axis .ax { grid-column: 2; position: relative; height: 100%; }
+.jl-axis .ax em { position: absolute; top: 2px; transform: translateX(-50%); font: var(--ds-font-body-small); font-style: normal; color: var(--ds-text-subtlest); white-space: nowrap; }
+.jl-axis .ax em:first-child { transform: none; }
+.jgroup { font: var(--ds-font-body-small); font-weight: var(--ds-font-weight-bold); color: var(--ds-text-subtle); padding: var(--ds-space-150) var(--ds-space-100) var(--ds-space-050); }
+.jrow { width: 100%; padding: var(--ds-space-100); border: 0; border-radius: var(--ds-radius-medium); background: transparent; color: var(--ds-text); text-align: start; font: inherit; cursor: pointer; transition: background-color var(--ds-duration-short) var(--ds-easing-out-practical); }
+.jrow:hover { background: var(--ds-background-neutral-subtle-hovered); }
+.jrow:active { background: var(--ds-background-neutral-subtle-pressed); }
+.jrow:focus-visible { outline: 2px solid var(--ds-border-focused); outline-offset: -2px; }
+.jrow[aria-expanded="true"] { background: var(--ds-background-selected); color: var(--ds-text-selected); }
+.jrow .jn { display: flex; align-items: center; gap: var(--ds-space-100); min-width: 0; font-weight: var(--ds-font-weight-medium); }
+.jrow .jn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jrow .jt { position: relative; height: 28px; background-image: linear-gradient(to right, var(--ds-border) 1px, transparent 1px); background-size: var(--tick, 25%) 100%; background-repeat: repeat-x; }
+.jrow .jt::before { content: ""; position: absolute; left: 0; right: 0; top: 13px; height: 2px; border-radius: 1px; background: var(--ds-background-neutral); }
+.jrow .jt b { position: absolute; top: 8px; height: 12px; min-width: 4px; border-radius: var(--ds-radius-full); background: var(--ds-background-accent-purple-subtle, var(--ds-icon-accent-purple)); }
+.jrow:hover .jt b, .jrow[aria-expanded="true"] .jt b { background: var(--ds-background-accent-purple-bolder, var(--ds-icon-accent-purple)); }
+.jrow .chev { display: grid; place-items: center; color: var(--ds-icon-subtle); transition: transform var(--ds-duration-short) var(--ds-easing-out-practical); }
+.jrow[aria-expanded="true"] .chev { transform: rotate(90deg); color: var(--ds-icon-selected); }
+.jx { display: grid; gap: var(--ds-space-250); margin: var(--ds-space-050) 0 var(--ds-space-150); padding: var(--ds-space-250); border-radius: var(--ds-radius-large); background: var(--ds-surface-sunken); animation: ftm-drop .24s var(--ds-easing-out-practical, ease-out); }
+@keyframes ftm-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.jx-h { display: flex; align-items: center; gap: var(--ds-space-100); flex-wrap: wrap; }
+.jx-h p { flex: 1; min-width: 220px; font: var(--ds-font-body-small); color: var(--ds-text-subtle); }
+.jx .kmini { background: var(--ds-surface); }
+.jd-sub { font: var(--ds-font-heading-xsmall); margin-bottom: var(--ds-space-100); }
+.stg { display: grid; grid-template-columns: 150px minmax(0, 1fr) 84px; gap: var(--ds-space-100) var(--ds-space-150); align-items: center; font: var(--ds-font-body-small); }
+.stg .bar { height: 8px; border-radius: var(--ds-radius-full); background: var(--ds-background-neutral); overflow: hidden; }
+.stg .bar b { display: block; height: 100%; border-radius: inherit; background: var(--ds-background-accent-purple-bolder, var(--ds-icon-accent-purple)); }
+.stg .s { text-align: end; color: var(--ds-text-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jx .dt { background: var(--ds-surface); border-radius: var(--ds-radius-medium); }
+.jx .dt td.r { white-space: nowrap; }
+@media (max-width: 900px) {
+  .fwrap, .fwrap.open { grid-template-columns: minmax(0, 1fr); gap: var(--ds-space-300); } .fdetail { position: static; }
+  .jl-axis, .jrow { grid-template-columns: 140px minmax(0, 1fr) 20px; gap: var(--ds-space-100); }
+}
+@media (max-width: 720px) { .modal.flowm .modal-h > .aws { --sz: 32px; } .modal.flowm .modal-h h2 { font: var(--ds-font-heading-small); } }
+@media (max-width: 560px) { .fpar-lanes { grid-template-columns: 1fr; } .stg { grid-template-columns: 100px minmax(0, 1fr) 72px; } .jl-axis, .jrow { grid-template-columns: 112px minmax(0, 1fr) 20px; } }
+@media (prefers-reduced-motion: reduce) { .now-tag i, .track i.is-running::after, .spin, .fd-live .pbar span, .fstep.is-running::before, .is-running > .fnode::after, .is-running > .fnode .aws { animation: none; } }
+/* icons only: the running ones wander a few pixels on a new random path each round */
+.bob { display: inline-grid; }
+.bob[style] { animation: ftm-bob var(--bd, 1.8s) var(--ds-easing-in-out, ease-in-out) var(--bdl, 0s) infinite; }
+@keyframes ftm-bob { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(var(--x1), var(--y1)); } 50% { transform: translate(var(--x2), var(--y2)); } 75% { transform: translate(var(--x3), var(--y3)); } }
+.nowis { display: flex; gap: var(--ds-space-200); padding: var(--ds-space-050) var(--ds-space-050) var(--ds-space-025); }
+.nowi { padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--ds-radius-large); }
+.nowi:hover .aws { box-shadow: 0 0 0 2px var(--ds-border-bold); }
+.nowi:focus-visible { outline: 2px solid var(--ds-border-focused); outline-offset: 2px; }
+.now .now-l > * { white-space: nowrap; }
+.now .now-l .lozenge { margin-inline-start: auto; }
+.now .now-l > span:nth-child(2) { margin-inline-start: auto; }
+.now .now-l > span:nth-child(2) + .lozenge { margin-inline-start: 0; }
+.fwrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--ds-space-300); }
+.pflow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; row-gap: var(--ds-space-200); padding: var(--ds-space-300) var(--ds-space-100); }
+.pnode { position: relative; padding: 6px; border: 0; border-radius: var(--ds-radius-xlarge); background: transparent; cursor: pointer; transition: background-color var(--ds-duration-short) var(--ds-easing-out-practical); }
+.pnode:hover { background: var(--ds-background-neutral-subtle-hovered); }
+.pnode:focus-visible { outline: 2px solid var(--ds-border-focused); outline-offset: 0; }
+.pnode[aria-pressed="true"] { background: var(--ds-background-selected); box-shadow: inset 0 0 0 2px var(--ds-border-selected); }
+.pnode .aws { transition: transform var(--ds-duration-short) var(--ds-easing-out-practical); }
+.pnode:hover .aws { transform: scale(1.06); }
+.pnode.is-pending .aws, .pnode.is-skipped .aws { --tile-bg: var(--ds-background-neutral); --tile-fg: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.pnode.is-running .aws { box-shadow: 0 0 0 2px var(--ds-border-discovery); }
+.pnode.is-failed .aws { box-shadow: 0 0 0 2px var(--ds-border-danger); }
+.pnode .pb { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--ds-surface-overlay, var(--ds-surface)); box-shadow: 0 0 0 2px var(--ds-surface-overlay, var(--ds-surface)); }
+.pnode .pb .ic { width: 16px; height: 16px; }
+.pnode .pb .spin { width: 14px; height: 14px; }
+.pnode.is-done .pb .ic { color: var(--ds-icon-success); }
+.pnode.is-failed .pb .ic { color: var(--ds-icon-danger); }
+.pnode.is-cancelled .pb .ic { color: var(--ds-icon-warning); }
+.pnode.is-pending .pb .ic, .pnode.is-skipped .pb .ic { color: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.pc { flex: none; display: block; width: 26px; height: 2px; border-radius: 1px; background: var(--ds-border); }
+.pc.is-done { background: var(--ds-border-success); }
+.pc.is-failed { background: var(--ds-border-danger); }
+.pc.is-pending, .pc.is-skipped, .pc.is-cancelled { background: repeating-linear-gradient(to right, var(--ds-border-bold) 0 3px, transparent 3px 6px); opacity: .7; }
+.pc.is-running { background: repeating-linear-gradient(to right, var(--ds-border-discovery) 0 5px, transparent 5px 10px); background-size: 10px 2px; animation: ftm-flow .55s linear infinite; }
+@keyframes ftm-flow { from { background-position: 0 0; } to { background-position: 10px 0; } }
+.ppar { display: grid; gap: var(--ds-space-150); padding: var(--ds-space-150); border: var(--ds-border-width) dashed var(--ds-border); border-radius: var(--ds-radius-xlarge); }
+.ppar.is-running { border-color: var(--ds-border-discovery); }
+.ppar.is-done { border-color: var(--ds-border-success); border-style: solid; }
+.ppar.is-failed { border-color: var(--ds-border-danger); }
+.plane { display: flex; align-items: center; }
+.pend { display: grid; place-items: center; width: 28px; height: 28px; }
+.pend .ic { width: 22px; height: 22px; }
+.pend.is-done .ic { color: var(--ds-icon-success); } .pend.is-failed .ic { color: var(--ds-icon-danger); } .pend.is-pending .ic { color: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.fdetail { position: static; animation: ftm-drop .26s var(--ds-easing-out-practical, ease-out); }
+.fd-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--ds-space-300); align-items: start; }
+.fd-l { display: grid; gap: var(--ds-space-200); }
+@media (max-width: 800px) { .fd-cols { grid-template-columns: minmax(0, 1fr); } .pc { width: 14px; } .aws.xl { --sz: 40px; } }
+@media (prefers-reduced-motion: reduce) { .bob[style], .pc.is-running { animation: none; } }
 </style>
 </head>
 <body>
@@ -3613,7 +3816,8 @@ function buildPages(runs) {
       { path: "bq2", title: "BQ2 Cross-bank Movement", icon: "data-flow", kind: "bq2", run: null }] });
   runs.forEach(r => PAGES.push({ section: r.run, group: r.run, items: [
     { path: `${r.run}-bq1`, title: "BQ1 Account Profiles", icon: "chart-bar", kind: "bq1", run: r.run },
-    { path: `${r.run}-bq2`, title: "BQ2 Cross-bank Movement", icon: "data-flow", kind: "bq2", run: r.run }] }));
+    { path: `${r.run}-bq2`, title: "BQ2 Cross-bank Movement", icon: "data-flow", kind: "bq2", run: r.run },
+    { path: `${r.run}-spark`, title: "Spark jobs", icon: "pulse", kind: "spark", run: r.run }] }));
   Object.keys(BY_PATH).forEach(k => delete BY_PATH[k]);
   PAGES.forEach(s => s.items.forEach(i => { BY_PATH[i.path] = { ...i, section: s.section }; }));
   Object.keys(RUN_BY).forEach(k => delete RUN_BY[k]);
@@ -3972,14 +4176,18 @@ function pickModal(run) {
   delete ONCLOSE.pick;  // a previous pick popup closing must not clear this pick
   const r = DATA.runs.find(x => x.run === run); if (!r) return;
   const m = runMeta(r), latest = run === LATEST;
-  const html = `${modalHead("dataset", `Open a dashboard for ${esc(run)}`, `${latest ? `<span class="lozenge success">Latest</span>` : ""}<span>${esc(r.dataset)} dataset, finished ${m.when} UTC, took ${m.took}. You can switch runs later from the dashboard header.</span>`)}
-  <div class="modal-b"><div class="grid g2">
+  const html = `${modalHead("dataset", `Open a dashboard for ${esc(run)}`, `${latest ? `<span class="lozenge success">Latest</span>` : ""}<span>${esc(r.dataset)} dataset, finished ${m.when} UTC, took ${m.took}. You can switch runs later from the dashboard header.</span>`,
+    `<button class="btn" data-flow="${esc(run)}">${ic("data-flow")}View pipeline flow</button>`)}
+  <div class="modal-b"><div class="grid g3">
     <button class="feature" data-go="${run}-bq1"><div class="panel">${art("rank")}</div><div class="body">
       <h3>BQ1: Account risk prioritisation</h3><p>Which accounts should investigators review first under limited daily capacity, and which behaviours matter most?</p>
       <span class="go">Open BQ1 for ${esc(run)} ${ic("arrow-right")}</span></div></button>
     <button class="feature" data-go="${run}-bq2"><div class="panel">${art("network")}</div><div class="body">
       <h3>BQ2: Laundering networks</h3><p>How do laundering networks move funds differently from normal transactions, and which banks are disproportionate entry and exit points?</p>
       <span class="go">Open BQ2 for ${esc(run)} ${ic("arrow-right")}</span></div></button>
+    <button class="feature" data-go="${run}-spark"><div class="panel">${awsChain()}</div><div class="body">
+      <h3>Pipeline and Spark jobs</h3><p>See every step this run took on AWS, and how each of its five Spark jobs did.</p>
+      <span class="go">Open the run details ${ic("arrow-right")}</span></div></button>
   </div></div>`;
   const modal = openModal("pick", html, `Open a dashboard for ${run}`);
   modal.classList.add("pick"); modal.parentElement.classList.add("pick-wrap");
@@ -4010,18 +4218,20 @@ function pipeInner() {
       ? `<span class="lozenge success" title="${esc(u.files[f].name)}, ${u.files[f].mb} MB">${ic("check-mark")}${f}</span>`
       : `<span class="lozenge neutral" title="Upload a file to raw/${f}/">${ic("minus")}${f}</span>`).join("");
     const when = u.status === "running" && ex ? `Started ${utc(ex.started)} UTC, running for ${since(ex.started)}`
-      : u.status === "failed" && ex ? `Stopped ${utc(ex.stopped)} UTC (${esc(ex.status.toLowerCase().replace("_", " "))}). See the execution in the Step Functions console.`
+      : u.status === "failed" && ex ? `Stopped ${utc(ex.stopped)} UTC (${esc(ex.status.toLowerCase().replace("_", " "))}).`
       : u.status === "succeeded" ? "Finished, saving the results"
       : u.status === "incomplete" ? `Still needed: ${u.missing.map(esc).join(", ")}`
       : u.uploaded ? `Uploaded ${utc(u.uploaded)} UTC` : "";
     const canGo = P.can_start && u.valid_name && (u.status === "ready" || u.status === "failed");
     const btn = u.status === "running" || u.status === "succeeded" ? ""
       : `<button class="btn ${canGo ? "primary" : ""}" data-start="${esc(u.run)}"${canGo ? "" : " disabled"}>${ic(u.status === "failed" ? "refresh" : "play")}<span>${u.status === "failed" ? "Retry" : "Start"}</span></button>`;
+    const live = (u.status === "running" || u.status === "failed") && flowFor(u.run) ? nowBox(u) : "";
+    const view = live ? `<button class="btn" data-flow="${esc(u.run)}">${ic("data-flow")}<span>View pipeline</span></button>` : "";
     return `<div class="upcard${u.status === "ready" ? " ready" : ""}">
       <div class="top">${spot("dataset", "sm")}<div class="t"><h3>${esc(u.run)}</h3><div class="sub">${u.dataset ? `${esc(u.dataset)} dataset` : "Dataset not known yet"}${u.valid_name ? "" : ". Rename the folder: lowercase letters, numbers and hyphens only"}</div></div><span class="lozenge ${tone}">${label}</span></div>
       <div class="files">${files}</div>
-      ${u.status === "running" || u.status === "succeeded" ? `<div class="pbar" role="progressbar" aria-label="${esc(u.run)} is running"><span></span></div>` : ""}
-      <div class="foot"><span class="sub">${when}</span>${btn}</div></div>`;
+      ${live || (u.status === "running" || u.status === "succeeded" ? `<div class="pbar" role="progressbar" aria-label="${esc(u.run)} is running"><span></span></div>` : "")}
+      <div class="foot"><span class="sub">${when}</span>${view || btn ? `<span class="btn-group">${view}${btn}</span>` : ""}</div></div>`;
   }).join("");
   const refresh = `<div class="pipe-bar" style="display:flex;gap:var(--ds-space-100);align-items:center">${needCode ? `<input type="password" id="pipeCode" placeholder="Passcode to start runs" aria-label="Passcode to start runs" autocomplete="off" value="${esc(ST.pipeCode || "")}">` : ""}<button class="btn" id="pipeRefresh">${ic("refresh")}Check S3 again</button></div>`;
   return `${pipeHead(refresh)}
@@ -4034,6 +4244,7 @@ function drawPipe() {
   const box = $("#pipeBox"); if (!box) return;
   const code = $("#pipeCode"); if (code) ST.pipeCode = code.value;
   box.innerHTML = pipeInner();
+  rebob(box);
   schedulePoll();
 }
 /* Auto-refresh the home page: every 15 s while a run is going, otherwise every minute.
@@ -4073,6 +4284,211 @@ function wireHome() {
   const b = $("[data-pick]"); if (b) b.addEventListener("click", () => pickRun(b.dataset.pick));
 }
 
+/* ---------- pipeline view (MOCK: the flows and Spark numbers are sample data from common/pipeline_view.py) ----------
+   AWS service glyphs drawn on ADS icon tiles (no AWS artwork is bundled). */
+const AWS = {
+  s3: ["Amazon S3", "lime", `<path d="M10.5 12.5c0-2.1 4.3-3.8 9.5-3.8s9.5 1.7 9.5 3.8-4.3 3.8-9.5 3.8-9.5-1.7-9.5-3.8Z"/><path d="m10.5 12.5 2.6 15.6c.3 1.9 3.3 3.3 6.9 3.3s6.6-1.4 6.9-3.3l2.6-15.6"/><path d="m19.5 19.5 7.2 3.6"/><circle cx="27.8" cy="23.6" r="1.2" fill="currentColor"/>`],
+  sfn: ["AWS Step Functions", "magenta", `<rect x="15" y="7.5" width="10" height="7" rx="1.6"/><rect x="7" y="25.5" width="10" height="7" rx="1.6"/><rect x="23" y="25.5" width="10" height="7" rx="1.6"/><path d="M20 14.5v5.5M12 25.5V20h16v5.5"/>`],
+  glue: ["AWS Glue", "purple", `<ellipse cx="20" cy="11" rx="9" ry="3.2"/><path d="M11 11v18c0 1.8 4 3.2 9 3.2s9-1.4 9-3.2V11"/><path d="M11 17c0 1.8 4 3.2 9 3.2s9-1.4 9-3.2M11 23c0 1.8 4 3.2 9 3.2s9-1.4 9-3.2"/>`],
+  emr: ["Amazon EMR Serverless", "purple", `<path d="m20 6.5 11.7 6.75v13.5L20 33.5 8.3 26.75v-13.5Z"/><path d="m14 20 3.5 3.5L26 15"/>`],
+  athena: ["Amazon Athena", "purple", `<circle cx="18" cy="18" r="8.5"/><path d="m24.2 24.2 7.3 7.3"/><path d="M14 15.5h8M14 19.5h5.5"/>`],
+};
+const aws = (svc, cls = "", quiet) => { const [name, tone, g] = AWS[svc]; return `<span class="aws ${tone} ${cls}"${quiet ? ' aria-hidden="true"' : ` role="img" aria-label="${name}" title="${name}"`}><svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${g}</svg></span>`; };
+const svcShort = svc => AWS[svc][0].replace(/^(Amazon|AWS) /, "");
+const SAMPLE = `<span class="lozenge warning sample" title="Mock for the design review: these numbers are generated. Nothing here is read from AWS yet.">Sample data</span>`;
+
+/* The 12 steps of is459-g7-pipeline, in order. <run> and <db> are filled in per run. */
+const FSTEPS = {
+  upload: { svc: "s3", name: "Upload the raw files", state: "Before the run",
+    what: "You upload one file each into transactions/, patterns/ and accounts/. Nothing starts on upload: the run waits for Start.",
+    reads: "Your computer", writes: "s3://is459-g7-projectbucket/runs/<run>/raw/" },
+  start: { svc: "sfn", name: "Start and set paths", state: "SetPaths",
+    what: "Start sends the run name, database and dataset to is459-g7-pipeline. SetPaths builds the raw, clean, curated, metrics and lookup paths from the run name.",
+    reads: "Run input: run, db, dataset", writes: "$.paths" },
+  database: { svc: "glue", name: "Create the Glue database", state: "CreateDatabase",
+    what: "Creates the Glue database that will hold this run's tables. On a retry it already exists and the step carries on.",
+    reads: "Run input", writes: "Glue database <db>" },
+  clean: { svc: "emr", spark: true, name: "Clean transactions", state: "Clean", short: "clean.py",
+    what: "Strips leading zeros from bank IDs, drops duplicates and self-transfers, cuts the thin tail, converts amounts to USD and adds countries.",
+    reads: "raw/transactions/, raw/accounts/", writes: "clean/transactions/, clean/banks/, clean/fx_rates/" },
+  bq1profiles: { svc: "emr", spark: true, name: "BQ1 account profiles", state: "BQ1Profiles", short: "account_profiles.py",
+    what: "One behaviour profile per account per day: ACH share, cross-border share, fan-in, fan-out, amount band, 24-hour pass-through and activity spike. Labels are written apart so they never enter the score.",
+    reads: "clean/transactions/", writes: "curated/bq1/account_profiles/, account_labels/" },
+  bq1scoring: { svc: "emr", spark: true, name: "BQ1 risk scoring", state: "BQ1Scoring", short: "risk_scoring.py",
+    what: "Scores each account-day from 0 to 100 with fixed weights and ranks accounts within each day. Labels are joined only after ranking, to test review capacities of 50 to 5000 a day.",
+    reads: "curated/bq1/account_profiles/", writes: "curated/bq1/risk_rankings/, capacity_evaluation/, capacity_summary/" },
+  bq2schemes: { svc: "emr", spark: true, name: "BQ2 schemes", state: "BQ2Schemes", short: "schemes.py",
+    what: "Parses Patterns.txt into one row per scheme transfer, adds countries and USD values, and matches each transfer to the clean data.",
+    reads: "raw/patterns/, clean/banks/, clean/fx_rates/", writes: "clean/schemes/" },
+  bq2analysis: { svc: "emr", spark: true, name: "BQ2 analysis", state: "BQ2Analysis", short: "bq2_analysis_v2.py",
+    what: "Builds the six BQ2 tables: flow comparison, holding time, scheme profile, country pairs, bank entry and exit, and scheme edges.",
+    reads: "clean/transactions/, clean/schemes/, clean/banks/", writes: "curated/bq2/ (6 tables)" },
+  crawler: { svc: "glue", name: "Crawl the tables", state: "CreateCrawler to CrawlerDone?",
+    what: "Creates and starts the crawler aml-run-<run>, then checks it every 20 seconds until it is ready. After this every table can be queried in Athena.",
+    reads: "clean/, raw/accounts/, curated/", writes: "16 tables in <db>" },
+  lookup: { svc: "athena", name: "Build the country lookup", state: "BuildCountryLookup",
+    what: "An Athena CREATE TABLE AS that gives each account the country it appears with most often, on either side of a transfer.",
+    reads: "<db>.transactions", writes: "curated/bq1/account_country_lookup/" },
+  view: { svc: "athena", name: "Create the dashboard view", state: "CreateDashboardView",
+    what: "The top 1000 accounts per day with their country and label. The BQ1 dashboard reads this view.",
+    reads: "risk_rankings, account_country_lookup, account_labels", writes: "View <db>.bq1_dashboard_queue" },
+  record: { svc: "s3", name: "Write run.json", state: "WriteRunRecord",
+    what: "Written last on purpose: the dashboard lists a run only once runs/<run>/run.json exists.",
+    reads: "Execution details", writes: "s3://is459-g7-projectbucket/runs/<run>/run.json" },
+};
+const FORDER = Object.keys(FSTEPS);
+const JOB_RES = { clean: [16, 64], bq1profiles: [12, 48], bq1scoring: [12, 48], bq2schemes: [8, 32], bq2analysis: [16, 64] };  // vCPU, GB
+const RATE = { vcpu: 0.042094, gb: 0.004628 };  // EMR Serverless arm64, USD per hour
+const FSTATE = { done: ["success", "Done"], running: ["discovery", "Running"], failed: ["danger", "Failed"], cancelled: ["warning", "Stopped"],
+  pending: ["neutral", "Waiting"], skipped: ["neutral", "Not run"] };
+const RSTATE = { RUNNING: ["discovery", "Running"], SUCCEEDED: ["success", "Succeeded"], FAILED: ["danger", "Failed"] };
+
+const secs = (a, b) => Math.max(0, ((b ? new Date(b) : Date.now()) - new Date(a)) / 1000);
+const dur = s => { s = Math.round(s); if (s < 60) return `${s} s`; const m = Math.floor(s / 60); if (m < 60) return m < 10 && s % 60 ? `${m} min ${s % 60} s` : `${m} min`; return `${Math.floor(m / 60)} h ${m % 60} min`; };
+const hhmm = iso => iso ? iso.slice(11, 16) : "";
+function flowFor(run) {
+  if (DATA.flow && DATA.flow.run === run) return DATA.flow;
+  return ((ST.pipe && ST.pipe.flows) || {})[run] || null;
+}
+const fstep = (f, k) => f.steps[k] || { state: "pending" };
+function flowStats(f) {
+  const of = s => FORDER.filter(k => fstep(f, k).state === s);
+  return { done: of("done").length, running: of("running"), failed: of("failed") };
+}
+const fill = (t, f) => t.replace(/<run>/g, f.run).replace(/<db>/g, "aml_" + f.run.replace(/-/g, "_"));
+const stateIcon = s => s.state === "running" ? `<span class="spin" aria-hidden="true"></span>`
+  : ic({ done: "check-circle", failed: "cross-circle", cancelled: "cross-circle", skipped: "minus" }[s.state] || "clock");
+
+/* Upload card: only the icons of the step(s) running now (they bounce); a click opens that step in the pipeline */
+const bob = () => { const r = () => (Math.random() * 8 - 4).toFixed(1) + "px";
+  return `--x1:${r()};--y1:${r()};--x2:${r()};--y2:${r()};--x3:${r()};--y3:${r()};--bd:${(1.3 + Math.random() * 1.2).toFixed(2)}s;--bdl:-${(Math.random() * 2).toFixed(2)}s`; };
+function rebob(root) {  // a new random path every round, so the bouncing never repeats
+  root.querySelectorAll(".bob[style]").forEach(el => { if (el.dataset.bob) return; el.dataset.bob = 1;
+    el.addEventListener("animationiteration", () => { el.setAttribute("style", bob()); }); });
+}
+function nowBox(u) {
+  const f = flowFor(u.run); if (!f) return "";
+  const S = flowStats(f), track = `<div class="track" aria-hidden="true">${FORDER.map(k => `<i class="is-${fstep(f, k).state}"></i>`).join("")}</div>`;
+  const tile = (k, run) => `<button class="nowi" data-flow="${esc(u.run)}" data-node="${k}" aria-label="Open ${esc(FSTEPS[k].name)} in the pipeline"><span class="bob"${run ? ` style="${bob()}"` : ""}>${aws(FSTEPS[k].svc, "lg", true)}</span></button>`;
+  if (u.status === "failed") {
+    const k = S.failed[0]; if (!k) return "";
+    return `<div class="now fail"><div class="now-l"><span class="now-tag"><i></i>Failed at step ${FORDER.indexOf(k) + 1} of 12</span>${SAMPLE}</div><div class="nowis">${tile(k, false)}</div>${track}</div>`;
+  }
+  return `<div class="now"><div class="now-l"><span class="now-tag"><i></i>Now running${S.running.length > 1 ? " in parallel" : ""}</span><span>${S.done} of 12 steps done</span>${SAMPLE}</div>
+    <div class="nowis">${S.running.map(k => tile(k, true)).join("")}</div>${track}</div>`;
+}
+
+/* The flow popup: just the pipeline as icons. A step's name and details appear only when it is clicked. */
+function pnode(f, k, picked) {
+  const d = FSTEPS[k], s = fstep(f, k);
+  return `<button class="pnode is-${s.state}" data-node="${k}" aria-pressed="${k === picked}" aria-label="${esc(d.name)}, ${FSTATE[s.state][1]}"><span class="bob"${s.state === "running" ? ` style="${bob()}"` : ""}>${aws(d.svc, "xl", true)}</span><span class="pb">${stateIcon(s)}</span></button>`;
+}
+const pc = st => `<i class="pc is-${st}" aria-hidden="true"></i>`;
+function flowGraph(f, picked) {
+  const n = k => pnode(f, k, picked), st = k => fstep(f, k).state;
+  const lanes = ["bq1profiles", "bq1scoring", "bq2schemes", "bq2analysis"].map(st);
+  const par = lanes.some(s => s === "failed") ? "failed" : lanes.some(s => s === "running") ? "running" : lanes.every(s => s === "done") ? "done" : "pending";
+  const lane = (a, b) => `<div class="plane">${n(a)}${pc(st(b))}${n(b)}</div>`;
+  const end = f.status === "SUCCEEDED" ? ["done", "check-circle"] : f.status === "FAILED" ? ["failed", "cross-circle"] : ["pending", "clock"];
+  const seq = ks => ks.map((k, i) => (i ? pc(st(k)) : "") + n(k)).join("");
+  return `<div class="pflow" role="group" aria-label="Pipeline steps">${seq(["upload", "start", "database", "clean"])}${pc(par)}
+    <div class="ppar is-${par}">${lane("bq1profiles", "bq1scoring")}${lane("bq2schemes", "bq2analysis")}</div>
+    ${pc(st("crawler"))}${seq(["crawler", "lookup", "view", "record"])}${pc(end[0])}<span class="pend is-${end[0]}" aria-label="${f.status}">${ic(end[1])}</span></div>`;
+}
+function flowDetail(f, k) {
+  const d = FSTEPS[k], s = fstep(f, k), [tone, label] = FSTATE[s.state], finished = !!RUN_BY[f.run];
+  const up = ((ST.pipe && ST.pipe.uploads) || []).find(u => u.run === f.run);
+  const rows = [["Step Functions state", `<code>${esc(d.state)}</code>`]];
+  if (s.start) rows.push(["Started", `${utc(s.start)} UTC`]);
+  if (s.end) rows.push([s.state === "done" ? "Finished" : "Stopped", `${utc(s.end)} UTC`]);
+  if (s.start) rows.push(["Took", dur(secs(s.start, s.end)) + (s.state === "running" ? " so far" : "")]);
+  rows.push(["Reads", esc(fill(d.reads, f))], ["Writes", esc(fill(d.writes, f))]);
+  if (k === "upload" && up) rows.push(["Files", ["transactions", "patterns", "accounts"].filter(x => up.files[x]).map(x => `${esc(up.files[x].name)} <span class="muted">${up.files[x].mb} MB</span>`).join("<br>")]);
+  if (d.spark) {
+    const [v, g] = JOB_RES[k];
+    rows.push(["Capacity", `${v} vCPU, ${g} GB`]);
+    if (s.start && s.state !== "pending") { const h = secs(s.start, s.end) / 3600; rows.push(["Cost" + (s.state === "running" ? " so far" : ""), `$${(h * (v * RATE.vcpu + g * RATE.gb)).toFixed(3)} <span class="muted">estimate</span>`]); }
+  }
+  const act = d.spark && finished ? `<div class="fd-a"><button class="btn" data-go="${esc(f.run)}-spark" data-job-open="${k}">${ic("chart-bar")}Open in Spark jobs</button></div>` : "";
+  return `<div class="fd-h">${aws(d.svc, "lg")}<div><div class="fd-svc">${esc(AWS[d.svc][0])} · step ${FORDER.indexOf(k) + 1} of 12</div><h3>${esc(d.name)}</h3></div><span class="lozenge ${tone}">${label}</span><button class="btn subtle icon-only" data-unpick aria-label="Close the details">${ic("cross")}</button></div>
+    <div class="fd-cols"><div class="fd-l"><p class="fd-what">${esc(fill(d.what, f))}</p>
+      ${s.state === "running" ? `<div class="fd-live"><div class="pbar"><span></span></div><span>Step Functions is waiting for this step to finish.</span></div>` : ""}
+      ${s.error ? `<div class="errbox" role="alert">${ic(s.state === "cancelled" ? "warning" : "cross-circle")}<div><h3>${s.state === "cancelled" ? "Stopped" : "Error"}</h3><pre>${esc(s.error)}</pre></div></div>` : ""}${act}</div>
+    <table class="dt facts"><tbody>${rows.map(([a, b]) => `<tr><td class="muted">${a}</td><td>${b}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function flowModal(run, first) {
+  const f = flowFor(run); if (!f) return;
+  const [tone, label] = RSTATE[f.status] || ["neutral", f.status];
+  let picked = null;
+  const html = `<header class="modal-h">${aws("sfn", "lg")}<div class="mh-t"><h2>Pipeline for ${esc(run)}</h2>
+      <p><span class="lozenge ${tone}">${label}</span><span>${esc(f.dataset)} dataset</span>${SAMPLE}</p></div>
+    <div class="mh-a"><button class="btn subtle icon-only" data-close aria-label="Close">${ic("cross")}</button></div></header>
+  <div class="modal-b"><p class="fhint">${ic("information-circle")}Select an icon to see the step.</p>
+    <div class="fwrap" id="fWrap">${flowGraph(f, null)}<div id="fAside"></div></div></div>`;
+  const modal = openModal("flow", html, `Pipeline for ${run}`);
+  modal.classList.add("pick", "flowm"); modal.parentElement.classList.add("pick-wrap");
+  rebob(modal);
+  const show = k => {
+    picked = picked === k ? null : k;
+    modal.querySelectorAll("[data-node]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.node === picked)));
+    $("#fAside", modal).innerHTML = picked ? `<div class="fdetail" aria-live="polite">${flowDetail(f, picked)}</div>` : "";
+  };
+  modal.addEventListener("click", e => {
+    const b = e.target.closest("[data-node]"); if (b) return show(b.dataset.node);
+    if (e.target.closest("[data-unpick]")) return show(picked);
+    const g = e.target.closest("[data-go]");
+    if (g) { if (g.dataset.jobOpen) sparkJob = g.dataset.jobOpen; if (MODALS.length) closeModal(MODALS[0].dataset.key, true); }
+  });
+  if (first && FSTEPS[first]) show(first);
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-flow]"); if (b) { e.preventDefault(); flowModal(b.dataset.flow, b.dataset.node); } });
+
+/* ---------- Spark jobs page: <run>-spark. The jobs on one time axis; numbers only after a click. ---------- */
+let sparkJob = null;
+const awsChain = (cls = "") => `<div class="awsart ${cls}">${["s3", "sfn", "emr", "glue", "athena"].map(s => aws(s)).join("<i></i>")}</div>`;
+const JGROUPS = [["Runs first", ["clean"]], ["BQ1, at the same time as BQ2", ["bq1profiles", "bq1scoring"]], ["BQ2, at the same time as BQ1", ["bq2schemes", "bq2analysis"]]];
+function sparkPage(p) {
+  const f = DATA.flow, jobs = DATA.jobs || [], by = Object.fromEntries(jobs.map(j => [j.id, j]));
+  const t0 = new Date(jobs[0].start), t1 = new Date(jobs.map(j => j.end).sort().pop()), span = (t1 - t0) / 1000;
+  const mins = span / 60, step = [1, 2, 5, 10, 15, 30, 60].find(s => mins / s <= 5) || 120;
+  const ticks = []; for (let m = 0; m <= mins; m += step) ticks.push(m);
+  const x = iso => (new Date(iso) - t0) / 1000 / span * 100;
+  const row = id => { const j = by[id]; if (!j) return ""; const l = x(j.start), w = Math.max(.8, x(j.end) - l), open = id === sparkJob;
+    return `<button class="jrow" data-job="${id}" aria-expanded="${open}"><span class="jn">${aws("emr", "sm")}<span>${esc(j.name)}</span></span>
+      <span class="jt" style="--tick:${(step * 60 / span * 100).toFixed(3)}%"><b style="left:${l.toFixed(2)}%;width:${w.toFixed(2)}%"></b></span><span class="chev">${ic("chevron-right")}</span></button>
+      <div class="jx-slot" id="jx-${id}">${open ? jobDetail(j) : ""}</div>`; };
+  return `${crumbs([{ label: "Home", go: "home" }, { label: p.run }, { label: "Spark jobs" }])}
+  <div class="hero"><div><h1 class="sm">Spark jobs for ${esc(p.run)}</h1>
+    <p>The five Spark jobs Step Functions ran on EMR Serverless, on one time line. Select a job to see how it did.</p>
+    <div class="actions">${runPicker(p)}<button class="btn" data-flow="${esc(p.run)}">${ic("data-flow")}View the pipeline</button>${SAMPLE}</div></div>${art("flow", "sm")}</div>
+  <section class="card"><div class="jl" role="list">
+    <div class="jl-axis" aria-hidden="true"><span></span><span class="ax">${ticks.map(m => `<em style="left:${(m / mins * 100).toFixed(2)}%">${m} min</em>`).join("")}</span><span></span></div>
+    ${JGROUPS.map(([t, ids]) => `<div class="jgroup">${esc(t)}</div>${ids.map(row).join("")}`).join("")}
+  </div></section>`;
+}
+function jobDetail(j) {
+  const top = Math.max(...j.stages.map(s => s[1]));
+  return `<div class="jx">
+    <div class="jx-h"><span class="lozenge success">Succeeded</span><p><code>${esc(j.script.split("/").pop())}</code> · job run <code>${esc(j.job_name)}</code></p>
+      <button class="btn" disabled title="Live version: opens the Spark UI for this job run">${ic("link-external")}Spark UI</button>
+      <button class="btn" disabled title="Live version: opens the driver log in s3://is459-g7-projectbucket/logs/EMR-Serverless/">${ic("table")}Driver log</button></div>
+    <div class="grid g4">${kpiMini("Duration", dur(j.seconds), `${hhmm(j.start)} to ${j.end.slice(11, 16)} UTC`)}${kpiMini("Capacity", j.workers.split(", ").slice(1).join(", "), j.workers.split(", ")[0])}
+      ${kpiMini("Billed", `${j.vcpu_h.toFixed(2)} vCPU-h`, `${j.gb_h.toFixed(1)} GB-hours`)}${kpiMini("Cost", "$" + j.cost.toFixed(3), "Estimate, arm64 rates")}</div>
+    <div class="g21m"><div><h4 class="jd-sub">Where the time went</h4>
+        <div class="stg">${j.stages.map(([n, s]) => `<span>${esc(n)}</span><span class="bar"><b style="width:${(s / top * 100).toFixed(1)}%"></b></span><span class="s">${dur(s)}</span>`).join("")}</div></div>
+      <div><h4 class="jd-sub">What it wrote</h4><table class="dt facts"><tbody>${j.metrics.map(([a, b, c]) => `<tr><td>${esc(a)}<br><span class="muted">${esc(c)}</span></td><td class="r strong">${typeof b === "number" ? fmt(b) : esc(b)}</td></tr>`).join("")}</tbody></table></div></div>
+  </div>`;
+}
+function pickJob(id) {
+  sparkJob = sparkJob === id ? null : id;
+  $$("[data-job]").forEach(r => r.setAttribute("aria-expanded", String(r.dataset.job === sparkJob)));
+  (DATA.jobs || []).forEach(j => { const slot = $(`#jx-${j.id}`); if (slot) slot.innerHTML = j.id === sparkJob ? jobDetail(j) : ""; });
+}
+function wireSpark() {
+  $$("[data-job]").forEach(r => r.addEventListener("click", () => pickJob(r.dataset.job)));
+  if (sparkJob) { const s = $(`#jx-${sparkJob}`); if (s) setTimeout(() => s.previousElementSibling.scrollIntoView({ block: "center" }), 50); }
+}
+
 function runPicker(p) {
   const label = p.run || "HI-Medium (current)";
   return `<div class="dd" id="runDd"><button class="btn" id="runBtn" aria-haspopup="listbox" aria-expanded="false">${ic("database")}Run: ${esc(label)}${p.run === LATEST ? ` <span class="lozenge success">Latest</span>` : ""} <span class="ic" style="width:12px;height:12px">${ICONS["chevron-down"] ? `<svg viewBox="0 0 16 16" fill="none">${ICONS["chevron-down"]}</svg>` : ""}</span></button></div>`;
@@ -4085,7 +4501,7 @@ function wireRunPicker(p) {
     if (open) { open.remove(); btn.setAttribute("aria-expanded", "false"); return; }
     const m = document.createElement("div"); m.className = "dd-menu"; m.setAttribute("role", "listbox");
     m.innerHTML = DATA.runs.map(r => { const x = runMeta(r); return `<button class="opt" role="option" data-go="${r.run}-${p.kind}" aria-current="${r.run === p.run}"><span style="flex:1"><span>${esc(r.run)}</span><small>${esc(r.dataset)}, finished ${x.when} UTC</small></span>${r.run === LATEST ? `<span class="lozenge success">Latest</span>` : ""}</button>`; }).join("")
-      + `<button class="opt" role="option" data-go="${p.kind}" aria-current="${!p.run}"><span style="flex:1"><span>HI-Medium (current)</span><small>Original tables</small></span></button>`;
+      + (p.kind === "spark" ? "" : `<button class="opt" role="option" data-go="${p.kind}" aria-current="${!p.run}"><span style="flex:1"><span>HI-Medium (current)</span><small>Original tables</small></span></button>`);
     dd.appendChild(m); btn.setAttribute("aria-expanded", "true");
   });
   document.addEventListener("click", () => { const m = $("#runDd .dd-menu"); if (m) { m.remove(); btn.setAttribute("aria-expanded", "false"); } });
@@ -5398,7 +5814,7 @@ const LOAD_ART = () => `<svg class="ld-art" viewBox="0 0 220 120" aria-hidden="t
   <g class="ld-note">${note(-16, -10, 32, 20, "l")}</g>
   <g class="ld-coins"><g class="c1">${coin(86, 100, 8, "s")}</g><g class="c2">${coin(110, 100, 8, "s")}</g><g class="c3">${coin(134, 100, 8, "s")}</g></g></g></svg>`;
 let loadSeq = 0, loadIv = null, loadSlow = null;
-const loadTitle = p => p.kind === "bq1" ? "Loading BQ1 account profiles" : "Loading BQ2 cross-bank movement";
+const loadTitle = p => p.kind === "bq1" ? "Loading BQ1 account profiles" : p.kind === "spark" ? "Loading the Spark jobs" : "Loading BQ2 cross-bank movement";
 const loadSteps = p => [`Opening ${p.run || "HI-Medium (current)"}`, "Querying Athena", "Reading the results", "Checking the data"];
 /* Opens the popup. live = waiting on Athena: the steps advance and stop on the last one until hideLoader(). */
 function showLoader(title, steps, live, ms) {
@@ -5441,10 +5857,11 @@ function route() {
   page.style.animation = "none"; void page.offsetWidth; page.style.animation = "";
   redraws.clear(); hideTip(); closeMenus();
   if ($("#appearance")) toggleAppearance();
-  document.title = p.kind === "home" ? "Following the Money" : `${p.kind.toUpperCase()} · ${p.run || "HI-Medium (current)"} · Following the Money`;
+  document.title = p.kind === "home" ? "Following the Money" : `${p.kind === "spark" ? "Spark jobs" : p.kind.toUpperCase()} · ${p.run || "HI-Medium (current)"} · Following the Money`;
   if (p.kind === "home") { page.innerHTML = homePage(); wireHome(); }
   else if (DATA.error) { page.innerHTML = errorPage(p); wireRunPicker(p); }
   else if (p.kind === "bq1") { page.innerHTML = bq1Page(p); wireRunPicker(p); wireBq1(); }
+  else if (p.kind === "spark") { page.innerHTML = sparkPage(p); wireRunPicker(p); wireSpark(); }
   else { page.innerHTML = bq2Page(p); wireRunPicker(p); wireTabs(); }
   closeNav(true);
   window.scrollTo(0, 0); document.body.scrollTop = 0;
@@ -5484,8 +5901,8 @@ function srcBadge() {
 }
 function errorPage(p) {
   const run = p.run || "HI-Medium (current)";
-  return `${crumbs([{ label: "Home", go: "home" }, { label: run }, { label: p.kind.toUpperCase() }])}
-  <div class="hero"><div><h1 class="sm">${p.kind === "bq1" ? "Daily AML investigator queue" : "How do laundering networks move funds across banks?"}</h1>
+  return `${crumbs([{ label: "Home", go: "home" }, { label: run }, { label: p.kind === "spark" ? "Spark jobs" : p.kind.toUpperCase() }])}
+  <div class="hero"><div><h1 class="sm">${p.kind === "bq1" ? "Daily AML investigator queue" : p.kind === "spark" ? `Spark jobs for ${esc(run)}` : "How do laundering networks move funds across banks?"}</h1>
     <div class="actions">${runPicker(p)}</div></div>${art(p.kind === "bq1" ? "rank" : "network", "sm")}</div>
   <div class="errbox" role="alert">${ic("cross-circle")}<div><h3>Could not load ${esc(run)} from Athena</h3>
     <p>The page could not read its data. Try again, or pick another run above.</p><pre>${esc(DATA.error)}</pre>
