@@ -3711,10 +3711,10 @@ table.dt { width: 100%; border-collapse: collapse; font: var(--ds-font-body); }
 @media (max-width: 720px) { .modal.flowm .modal-h > .aws { --sz: 32px; } .modal.flowm .modal-h h2 { font: var(--ds-font-heading-small); } }
 @media (max-width: 560px) { .fpar-lanes { grid-template-columns: 1fr; } .stg { grid-template-columns: 100px minmax(0, 1fr) 72px; } .jl-axis, .jrow { grid-template-columns: 112px minmax(0, 1fr) 20px; } }
 @media (prefers-reduced-motion: reduce) { .now-tag i, .track i.is-running::after, .spin, .fd-live .pbar span, .fstep.is-running::before, .is-running > .fnode::after, .is-running > .fnode .aws { animation: none; } }
-/* icons only: the running ones wander a few pixels on a new random path each round */
+/* icons only: the running ones float slowly up and down */
 .bob { display: inline-grid; }
-.bob[style] { animation: ftm-bob var(--bd, 1.8s) var(--ds-easing-in-out, ease-in-out) var(--bdl, 0s) infinite; }
-@keyframes ftm-bob { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(var(--x1), var(--y1)); } 50% { transform: translate(var(--x2), var(--y2)); } 75% { transform: translate(var(--x3), var(--y3)); } }
+.bob[style] { animation: ftm-bob 3s ease-in-out var(--bdl, 0s) infinite; }
+@keyframes ftm-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 .nowis { display: flex; gap: var(--ds-space-200); padding: var(--ds-space-050) var(--ds-space-050) var(--ds-space-025); }
 .nowi { padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--ds-radius-large); }
 .nowi:hover .aws { box-shadow: 0 0 0 2px var(--ds-border-bold); }
@@ -4359,13 +4359,9 @@ const fill = (t, f) => t.replace(/<run>/g, f.run).replace(/<db>/g, "aml_" + f.ru
 const stateIcon = s => s.state === "running" ? `<span class="spin" aria-hidden="true"></span>`
   : ic({ done: "check-circle", failed: "cross-circle", cancelled: "cross-circle", skipped: "minus" }[s.state] || "clock");
 
-/* Upload card: only the icons of the step(s) running now (they bounce); a click opens that step in the pipeline */
-const bob = () => { const r = () => (Math.random() * 8 - 4).toFixed(1) + "px";
-  return `--x1:${r()};--y1:${r()};--x2:${r()};--y2:${r()};--x3:${r()};--y3:${r()};--bd:${(1.3 + Math.random() * 1.2).toFixed(2)}s;--bdl:-${(Math.random() * 2).toFixed(2)}s`; };
-function rebob(root) {  // a new random path every round, so the bouncing never repeats
-  root.querySelectorAll(".bob[style]").forEach(el => { if (el.dataset.bob) return; el.dataset.bob = 1;
-    el.addEventListener("animationiteration", () => { el.setAttribute("style", bob()); }); });
-}
+/* Upload card: only the icons of the step(s) running now (they float); a click opens that step in the pipeline */
+const bob = () => `--bdl:-${(Math.random() * 3).toFixed(2)}s`;  // a slow float up and down, each icon a little out of step
+function rebob() {}
 function nowBox(u) {
   const f = flowFor(u.run); if (!f) return "";
   const S = flowStats(f), track = `<div class="track" aria-hidden="true">${FORDER.map(k => `<i class="is-${fstep(f, k).state}"></i>`).join("")}</div>`;
