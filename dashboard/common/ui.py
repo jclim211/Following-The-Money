@@ -14,7 +14,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from common.pipeline import list_uploads, start_enabled, start_run
+from common.pipeline import list_uploads, passcode_required, start_run
 from common.runs import list_runs
 from common.ui_data import bq1_payload, bq2_payload
 
@@ -86,8 +86,8 @@ def page():
             uploads = list_uploads()
         except Exception as err:  # e.g. the server role cannot list executions yet
             uploads_error = str(err)[:200]
-    pipeline = None if kind != "home" else {"uploads": uploads, "error": uploads_error, "can_start": start_enabled(),
-                "unlocked": bool(st.session_state.get("pipeline_unlocked")),
+    pipeline = None if kind != "home" else {"uploads": uploads, "error": uploads_error, "can_start": True,
+                "unlocked": not passcode_required() or bool(st.session_state.get("pipeline_unlocked")),
                 "msg": st.session_state.get("ftm_pipe_msg")}
 
     args = {"runs": runs, "runs_error": runs_error, "path": path, "n": handled, "pipeline": pipeline}

@@ -32,17 +32,11 @@ aws events list-rules --name-prefix is459 --query "Rules[].[Name,State]"
 
 The pipeline role's inline policy `is459-g7-pipeline-policy` is imported too, so the plan shows any difference between it and `pipeline/orchestration/pipeline-role-policy.json`.
 
-## Passcode for the Start button
+## Start button
 
-The Start button stays off until the server has a passcode. On the EC2 server (Session Manager):
-
-```
-sudo mkdir -p /opt/bq1/repo/dashboard/.streamlit
-echo 'pipeline_passcode = "<choose one>"' | sudo tee /opt/bq1/repo/dashboard/.streamlit/secrets.toml
-sudo systemctl restart bq1-dashboard
-```
-
-`secrets.toml` is git-ignored, so deploys keep it. Locally, put the same line in `dashboard/.streamlit/secrets.toml` or set `PIPELINE_PASSCODE`.
+Anyone who can open the dashboard can press Start. To require a passcode later, add
+`pipeline_passcode = "..."` to `/opt/bq1/repo/dashboard/.streamlit/secrets.toml` on the server
+(git-ignored, so deploys keep it) and restart `bq1-dashboard`.
 
 ## Upload a run
 

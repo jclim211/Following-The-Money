@@ -8,8 +8,8 @@ trigger, pipeline/orchestration/trigger.py, used to send).
 The first execution of a run is named after the run. A retry after a failure is named
 <run>__2, <run>__3 and so on. Run names never contain "__", so the run is the part before it.
 
-Start needs the passcode in the server's environment (PIPELINE_PASSCODE) or Streamlit
-secrets (pipeline_passcode). Without one, Start is turned off.
+Anyone who can open the dashboard can press Start. To require a passcode, set
+PIPELINE_PASSCODE on the server (or pipeline_passcode in Streamlit secrets).
 """
 import hmac
 import json
@@ -39,8 +39,8 @@ def _passcode() -> str:
     return code
 
 
-def start_enabled() -> bool:
-    return bool(_passcode()) or bool(os.getenv("DASHBOARD_MOCK_DIR"))
+def passcode_required() -> bool:
+    return bool(_passcode())
 
 
 def _run_of(execution_name: str) -> str:
@@ -121,11 +121,9 @@ def start_run(run: str, passcode: str = "") -> tuple:
     """Start the pipeline for an uploaded run. Returns (ok, message)."""
     if not RUN_NAME.fullmatch(run or ""):
         return False, "Run names use lowercase letters, numbers and hyphens only."
-    if not st.session_state.get(AUTH_KEY):
-        code = _passcode()
-        if not code and not os.getenv("DASHBOARD_MOCK_DIR"):
-            return False, "Start is turned off on this server: no pipeline passcode is set."
-        if code and not hmac.compare_digest(str(passcode or ""), code):
+    code = _passcode()
+    if code and not st.session_state.get(AUTH_KEY):
+        if not hmac.compare_digest(str(passcode or ""), code):
             return False, "That passcode is not right."
         st.session_state[AUTH_KEY] = True
 
