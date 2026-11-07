@@ -3502,6 +3502,19 @@ table.dt { width: 100%; border-collapse: collapse; font: var(--ds-font-body); }
 .hero h1 { font-weight: 650; letter-spacing: -0.01em; }
 .metric .value { font-variant-numeric: lining-nums tabular-nums; }
 
+/* Home: uploaded runs and the Start button (common/pipeline.py) */
+.pipe .card { padding: var(--ds-space-100) var(--ds-space-200); }
+.pipe .files { display: flex; gap: var(--ds-space-050); flex-wrap: wrap; }
+.pipe .sub { display: block; font: var(--ds-font-body-small); color: var(--ds-text-subtle); }
+.pipe-bar { display: flex; align-items: center; gap: var(--ds-space-100); flex-wrap: wrap; margin-bottom: var(--ds-space-200); }
+.pipe-bar input { height: 2rem; width: 200px; padding: 0 var(--ds-space-100); font: var(--ds-font-body); color: var(--ds-text); background: var(--ds-background-input); border: var(--ds-border-width) solid var(--ds-border-input); border-radius: var(--ds-radius-medium); }
+.pipe-bar input:focus { outline: none; border-color: var(--ds-border-focused); box-shadow: inset 0 0 0 var(--ds-border-width) var(--ds-border-focused); }
+.pipe-bar .grow { flex: 1; }
+.pipe-msg { display: flex; align-items: center; gap: var(--ds-space-100); padding: var(--ds-space-100) var(--ds-space-150); border-radius: var(--ds-radius-medium); margin-bottom: var(--ds-space-200); font: var(--ds-font-body); }
+.pipe-msg.ok { background: var(--ds-background-success-subtler); color: var(--ds-text-success-bolder); }
+.pipe-msg.err { background: var(--ds-background-danger-subtler); color: var(--ds-text-danger-bolder); }
+.pipe code { font: var(--ds-font-code, 0.875em monospace); background: var(--ds-background-neutral); padding: 0 var(--ds-space-050); border-radius: var(--ds-radius-small); overflow-wrap: anywhere; }
+.pipe .btn:disabled { opacity: .5; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -3907,6 +3920,7 @@ function homePage() {
       <span class="meta"><span>${esc(r.dataset)} dataset</span><span>Finished ${m.when} UTC, took ${m.took}</span></span></button>`; }).join("")}
   </div>${runs.length ? "" : `<div class="locked">${ic("information-circle")}<span>${ST.runsError ? `Could not read the run list from S3: ${esc(ST.runsError)}` : "No pipeline runs have finished yet."} The original HI-Medium dashboards are in the menu.</span></div>`}
   <div id="step2">${step2()}</div>
+  <section class="pipe" id="pipeBox">${pipeInner()}</section>
   <p class="classic">${ic("link-external")}<span>Need the previous layout? <a href="/classic-bq1" target="_blank" rel="noopener">Classic BQ1</a> and <a href="/classic-bq2" target="_blank" rel="noopener">classic BQ2</a> open in a new tab, on the original HI-Medium tables.</span></p>`;
 }
 function step2() {
@@ -3924,6 +3938,68 @@ function step2() {
       <span class="go">Open BQ2 for ${esc(r)} ${ic("arrow-right")}</span></div></button>
   </div></div>`;
 }
+const PIPE_STATUS = {
+  incomplete: ["warning", "Missing files"], ready: ["information", "Ready to start"],
+  running: ["discovery", "Running"], failed: ["danger", "Failed"], succeeded: ["success", "Finishing"],
+};
+const utc = iso => iso ? iso.slice(0, 16).replace("T", " ") : "";
+function since(iso) {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+function pipeInner() {
+  if (!ST.pipe) return `<h2 class="h2xl">Start a pipeline run</h2><div class="locked">${ic("refresh")}<span>Checking S3 for new uploads…</span></div>`;
+  const P = ST.pipe, ups = P.uploads || [], msg = P.msg;
+  const needCode = P.can_start && !P.unlocked;
+  const rows = ups.map(u => {
+    const [tone, label] = PIPE_STATUS[u.status] || ["neutral", u.status], ex = u.execution;
+    const files = ["transactions", "patterns", "accounts"].map(f => u.files[f]
+      ? `<span class="lozenge success" title="${esc(u.files[f].name)}, ${u.files[f].mb} MB">${ic("check-mark")}${f}</span>`
+      : `<span class="lozenge neutral" title="Upload a file to raw/${f}/">${ic("minus")}${f}</span>`).join("");
+    const when = u.status === "running" && ex ? `Started ${utc(ex.started)} UTC, running for ${since(ex.started)}`
+      : u.status === "failed" && ex ? `Stopped ${utc(ex.stopped)} UTC (${esc(ex.status.toLowerCase().replace("_", " "))}). See the execution in the Step Functions console.`
+      : u.status === "incomplete" ? `Still needed: ${u.missing.map(esc).join(", ")}`
+      : u.uploaded ? `Last file uploaded ${utc(u.uploaded)} UTC` : "";
+    const canGo = P.can_start && u.valid_name && (u.status === "ready" || u.status === "failed");
+    const btn = u.status === "running" || u.status === "succeeded" ? ""
+      : `<button class="btn ${canGo ? "primary" : ""} compact" data-start="${esc(u.run)}"${canGo ? "" : " disabled"}>${ic(u.status === "failed" ? "refresh" : "arrow-right")}${u.status === "failed" ? "Retry" : "Start"}</button>`;
+    return `<tr><td><b>${esc(u.run)}</b><span class="sub">${u.dataset ? `${esc(u.dataset)} dataset` : "Dataset not known yet"}${u.valid_name ? "" : ". Rename the folder: lowercase letters, numbers and hyphens only"}</span></td>
+      <td><div class="files">${files}</div></td><td><span class="lozenge ${tone}">${label}</span><span class="sub">${when}</span></td><td class="r">${btn}</td></tr>`;
+  }).join("");
+  return `<h2 class="h2xl">Start a pipeline run</h2>
+  <p class="lead">Upload a dataset straight to S3, then start it here. Each run needs one file in each folder:
+    <code>s3://is459-g7-projectbucket/runs/&lt;run-name&gt;/raw/transactions/</code>, <code>…/raw/patterns/</code> and <code>…/raw/accounts/</code>.
+    When a run finishes it appears in step 1 above.</p>
+  ${msg ? `<div class="pipe-msg ${msg.ok ? "ok" : "err"}" role="status">${ic(msg.ok ? "check-circle" : "cross-circle")}<span>${esc(msg.text)}</span></div>` : ""}
+  <div class="pipe-bar">
+    ${needCode ? `<input type="password" id="pipeCode" placeholder="Passcode to start runs" aria-label="Passcode to start runs" autocomplete="off" value="${esc(ST.pipeCode || "")}">` : ""}
+    ${P.can_start ? "" : `<span class="lozenge neutral">${ic("lock-locked")}Start is turned off on this server</span>`}
+    <span class="grow"></span>
+    <button class="btn" id="pipeRefresh">${ic("refresh")}Check S3 again</button>
+  </div>
+  ${P.error ? `<div class="locked">${ic("information-circle")}<span>Could not read the uploads: ${esc(P.error)}</span></div>`
+    : ups.length ? `<div class="card"><div class="tbl-wrap"><table class="dt"><thead><tr><th>Run</th><th>Files in S3</th><th>Status</th><th class="r"></th></tr></thead><tbody>${rows}</tbody></table></div></div>`
+    : `<div class="locked">${ic("information-circle")}<span>No new uploads. Every run folder in S3 has finished.</span></div>`}`;
+}
+function drawPipe() {
+  const box = $("#pipeBox"); if (!box) return;
+  const code = $("#pipeCode"); if (code) ST.pipeCode = code.value;
+  box.innerHTML = pipeInner();
+  clearTimeout(ST.pipeTimer);
+  if ((ST.pipe && ST.pipe.uploads || []).some(u => u.status === "running" || u.status === "succeeded"))
+    ST.pipeTimer = setTimeout(() => { if (currentPath === "home") ST.send({ path: "home", n: ++ST.n, action: "refresh" }); }, 30000);
+}
+document.addEventListener("click", e => {
+  const s = e.target.closest("[data-start]");
+  if (s && !s.disabled) {
+    const code = $("#pipeCode"); if (code) ST.pipeCode = code.value;
+    s.disabled = true; s.lastChild.textContent = "Starting…";
+    ST.send({ path: "home", n: ++ST.n, action: "start", run: s.dataset.start, passcode: ST.pipeCode || "" });
+    return;
+  }
+  const r = e.target.closest("#pipeRefresh");
+  if (r) { r.disabled = true; ST.send({ path: "home", n: ++ST.n, action: "refresh" }); }
+});
 function pickRun(run) {
   pickedRun = run;
   document.querySelectorAll("[data-run]").forEach(x => x.setAttribute("aria-checked", String(x.dataset.run === run)));
@@ -3932,6 +4008,7 @@ function pickRun(run) {
   box.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
 }
 function wireHome() {
+  drawPipe();
   document.querySelectorAll("[data-run]").forEach(c => c.addEventListener("click", () => pickRun(c.dataset.run)));
   const b = $("[data-pick]"); if (b) b.addEventListener("click", () => pickRun(b.dataset.pick));
 }
@@ -5360,6 +5437,8 @@ const ST = {
 };
 function onRender(a) {
   buildPages(a.runs || []); ST.runsError = a.runs_error || "";
+  if (a.pipeline) ST.pipe = a.pipeline;
+  if (ST.shown === "home" && !a.pending) drawPipe();   // the upload list refreshes without redrawing home
   const path = BY_PATH[a.path] ? a.path : "home", p = BY_PATH[path];
   const key = `${path}|${a.n || 0}|${a.pending ? "pending" : "data"}`;
   if (key === ST.applied) return;               // the same render again (Streamlit reran for another reason)

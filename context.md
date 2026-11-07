@@ -23,6 +23,7 @@ pipeline/               Spark jobs that run on EMR Serverless (copies of s3://is
   bq1/account_profiles.py, bq1/risk_scoring.py
   bq2/schemes.py        Patterns.txt -> clean/schemes
 deploy/                 how the EC2 server runs and updates the dashboard
+infra/                  Terraform: the pipeline state machine, dashboard permission to start runs (see infra/README.md)
 archive/                old drafts (Glue jobs, old schema SQL, old dashboard). Not used.
 ```
 
@@ -36,6 +37,7 @@ Only touch resources named `is459-g7-*` or the bucket `is459-g7-projectbucket`.
 | Spark jobs | EMR Serverless app `is459-g7-spark`, scripts in `s3://is459-g7-projectbucket/scripts/` |
 | Glue databases | `aml_raw`, `aml_clean` (transactions, banks, fx_rates, schemes), `aml_curated` (BQ1 tables + view `bq1_investigator_queue`), `aml_metrics` |
 | Athena | workgroup `primary`, results to `s3://is459-g7-projectbucket/athena-results/` |
+| Pipeline | Step Functions `is459-g7-pipeline`, managed by Terraform in `infra/`. Upload to `runs/<run>/raw/{transactions,patterns,accounts}/`, then press Start on the dashboard home page. Uploads do not start runs on their own. |
 | Dashboard server | EC2 t3.micro `is459-g7-dashboard`, role `is459-g7-dashboard-role`, SG `is459-g7-dashboard-sg` |
 
 **Important:** `pipeline/` is a copy. EMR runs the files in S3. If you change a job, upload it to `scripts/` as well as committing it here.

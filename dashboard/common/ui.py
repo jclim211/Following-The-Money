@@ -14,6 +14,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
+from common.pipeline import list_uploads, start_enabled, start_run
 from common.runs import list_runs
 from common.ui_data import bq1_payload, bq2_payload
 
@@ -59,6 +60,16 @@ def page():
     if isinstance(nav, dict) and nav.get("n", 0) != handled:  # the user opened a page in the front end
         handled = st.session_state["ftm_n"] = nav.get("n", 0)
         path = str(nav.get("path") or "home")
+        if nav.get("action") == "start":  # Start on the home page's upload list
+            with work:
+                try:
+                    ok, msg = start_run(str(nav.get("run") or ""), str(nav.get("passcode") or ""))
+                except Exception as err:
+                    ok, msg = False, f"Could not start the run: {str(err)[:300]}"
+            st.session_state["ftm_pipe_msg"] = {"ok": ok, "text": msg, "run": nav.get("run"), "n": handled}
+        elif nav.get("action") == "refresh":
+            list_uploads.clear()
+            st.session_state.pop("ftm_pipe_msg", None)
     else:
         path = st.query_params.get("view", "home")
     kind, run = _resolve(path, runs)
@@ -69,7 +80,17 @@ def page():
     elif st.query_params.get("view") != path:
         st.query_params["view"] = path
 
-    args = {"runs": runs, "runs_error": runs_error, "path": path, "n": handled}
+    uploads, uploads_error = [], ""
+    if kind == "home":  # only the home page shows the upload list
+        try:
+            uploads = list_uploads()
+        except Exception as err:  # e.g. the server role cannot list executions yet
+            uploads_error = str(err)[:200]
+    pipeline = None if kind != "home" else {"uploads": uploads, "error": uploads_error, "can_start": start_enabled(),
+                "unlocked": bool(st.session_state.get("pipeline_unlocked")),
+                "msg": st.session_state.get("ftm_pipe_msg")}
+
+    args = {"runs": runs, "runs_error": runs_error, "path": path, "n": handled, "pipeline": pipeline}
     if kind != "home" and not st.session_state.get("ftm_mounted"):
         # First visit straight to a dashboard: draw the frame with its loading popup, then load.
         st.session_state["ftm_mounted"] = True

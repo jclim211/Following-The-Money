@@ -1,0 +1,10 @@
+[{"run": "li-small-1", "status": "ready", "valid_name": true, "dataset": "LI-Small", "uploaded": "2026-11-07T04:10:12+00:00", "missing": [],
+  "files": {"transactions": {"name": "LI-Small_Trans.csv", "mb": 486.2}, "patterns": {"name": "LI-Small_Patterns.txt", "mb": 0.1}, "accounts": {"name": "LI-Small_accounts.csv", "mb": 34.5}}, "execution": null},
+ {"run": "hi-large-1", "status": "running", "valid_name": true, "dataset": "HI-Large", "uploaded": "2026-11-07T03:40:00+00:00", "missing": [],
+  "files": {"transactions": {"name": "HI-Large_Trans.csv", "mb": 16100.0}, "patterns": {"name": "HI-Large_Patterns.txt", "mb": 1.2}, "accounts": {"name": "HI-Large_accounts.csv", "mb": 160.4}},
+  "execution": {"execution": "hi-large-1", "status": "RUNNING", "started": "2026-11-07T03:55:00+00:00", "stopped": null}},
+ {"run": "li-medium-1", "status": "incomplete", "valid_name": true, "dataset": "LI-Medium", "uploaded": "2026-11-07T03:20:00+00:00", "missing": ["patterns", "accounts"],
+  "files": {"transactions": {"name": "LI-Medium_Trans.csv", "mb": 2900.0}}, "execution": null},
+ {"run": "hi-small-3", "status": "failed", "valid_name": true, "dataset": "HI-Small", "uploaded": "2026-11-06T10:00:00+00:00", "missing": [],
+  "files": {"transactions": {"name": "HI-Small_Trans.csv", "mb": 475.0}, "patterns": {"name": "HI-Small_Patterns.txt", "mb": 0.1}, "accounts": {"name": "HI-Small_accounts.csv", "mb": 33.0}},
+  "execution": {"execution": "hi-small-3", "status": "FAILED", "started": "2026-11-06T10:05:00+00:00", "stopped": "2026-11-06T10:12:00+00:00"}}]
