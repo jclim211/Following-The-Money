@@ -15,6 +15,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from common.pipeline import list_uploads, passcode_required, start_run
+from common.pipeline_view import mock_flows, mock_spark_payload
 from common.runs import list_runs
 from common.ui_data import bq1_payload, bq2_payload
 
@@ -36,11 +37,11 @@ footer, #MainMenu { display: none !important; }
 
 
 def _resolve(path: str, runs: list):
-    """'bq1', 'bq2', '<run>-bq1', '<run>-bq2' or 'home' -> (kind, run dict or None)."""
+    """'bq1', 'bq2', '<run>-bq1', '<run>-bq2', '<run>-spark' or 'home' -> (kind, run dict or None)."""
     if path in ("bq1", "bq2"):
         return path, None
     for r in runs:
-        for kind in ("bq1", "bq2"):
+        for kind in ("bq1", "bq2", "spark"):
             if path == f"{r['run']}-{kind}":
                 return kind, r
     return "home", None
@@ -92,7 +93,9 @@ def page():
             uploads_error = str(err)[:200]
     pipeline = None if kind != "home" else {"uploads": uploads, "error": uploads_error, "can_start": True,
                 "unlocked": not passcode_required() or bool(st.session_state.get("pipeline_unlocked")),
-                "msg": st.session_state.get("ftm_pipe_msg")}
+                "msg": st.session_state.get("ftm_pipe_msg"),
+                # MOCK: sample step-by-step flows for the pipeline view (common/pipeline_view.py)
+                "flows": mock_flows(runs, uploads)}
 
     args = {"runs": runs, "runs_error": runs_error, "path": path, "n": handled, "pipeline": pipeline}
     if kind != "home" and not st.session_state.get("ftm_mounted"):
@@ -106,7 +109,10 @@ def page():
     if kind != "home":
         with work:
             try:
-                data = bq1_payload(run) if kind == "bq1" else bq2_payload(run)
+                if kind == "spark":  # MOCK: sample Spark job numbers until the live version reads AWS
+                    data = mock_spark_payload(run)
+                else:
+                    data = bq1_payload(run) if kind == "bq1" else bq2_payload(run)
             except Exception as err:  # shown in the design, with a Try again button
                 data = {"kind": kind, "error": str(err)[:800]}
     with box:
