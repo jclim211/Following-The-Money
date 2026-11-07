@@ -24,11 +24,13 @@ variable "state_machine_name" {
 variable "pipeline_role_name" {
   description = "IAM role the state machine runs as"
   type        = string
+  default     = "is459-g7-pipeline-role"
 }
 
 variable "trigger_rule_name" {
   description = "EventBridge rule that started the pipeline on every S3 upload. Terraform disables it."
   type        = string
+  default     = "is459-g7-pipeline-trigger"
 }
 
 variable "dashboard_role_name" {

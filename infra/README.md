@@ -17,21 +17,20 @@ Needs Terraform 1.10+ and AWS CLI v2, signed in as in `context.md` (`aws login -
 
 ```
 cd infra
-cp terraform.tfvars.example terraform.tfvars   # then fill in the two names, see below
 export AWS_PROFILE=is459                        # Windows: set AWS_PROFILE=is459
 terraform init
 terraform plan -out tfplan                      # read it: imports, 1 new policy, rule -> DISABLED
 terraform apply tfplan
 ```
 
-Find the two names:
+The resource names are the defaults in `variables.tf` (checked in AWS on 7 Nov). To check them again:
 
 ```
 aws stepfunctions describe-state-machine --state-machine-arn arn:aws:states:us-east-1:761018854594:stateMachine:is459-g7-pipeline --query roleArn
 aws events list-rules --name-prefix is459 --query "Rules[].[Name,State]"
 ```
 
-If the pipeline role already has an inline policy under another name, the plan adds `is459-g7-pipeline-access` beside it with the same permissions. Delete the old one afterwards if you like.
+The pipeline role's inline policy `is459-g7-pipeline-policy` is imported too, so the plan shows any difference between it and `pipeline/orchestration/pipeline-role-policy.json`.
 
 ## Passcode for the Start button
 

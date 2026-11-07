@@ -21,8 +21,13 @@ resource "aws_iam_role" "pipeline" {
   assume_role_policy = file("${path.module}/../pipeline/orchestration/pipeline-role-trust.json")
 }
 
+import {
+  to = aws_iam_role_policy.pipeline
+  id = "${var.pipeline_role_name}:is459-g7-pipeline-policy"
+}
+
 resource "aws_iam_role_policy" "pipeline" {
-  name   = "is459-g7-pipeline-access"
+  name   = "is459-g7-pipeline-policy"
   role   = aws_iam_role.pipeline.name
   policy = file("${path.module}/../pipeline/orchestration/pipeline-role-policy.json")
 }

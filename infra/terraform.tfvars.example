@@ -1,3 +1,0 @@
-# Copy to terraform.tfvars and fill in the names from the console (see variables.tf).
-pipeline_role_name = "is459-g7-pipeline-role"
-trigger_rule_name  = "is459-g7-pipeline-trigger"
