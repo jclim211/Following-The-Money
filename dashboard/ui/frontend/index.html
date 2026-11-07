@@ -3351,6 +3351,9 @@ html.inner-scroll body { height: 100%; overflow-y: auto; }
 .classic { display: flex; gap: var(--ds-space-100); align-items: center; margin-top: var(--ds-space-400); font: var(--ds-font-body-small); color: var(--ds-text-subtlest); }
 .classic .ic { width: 14px; height: 14px; flex: none; }
 .classic a { color: var(--ds-link); }
+.tgl-row .toggle { width: 40px; height: 24px; }
+.tgl-row .toggle::before { content: none; }
+.about[hidden] { display: none; }
 /* ===== Sections ===== */
 .section { margin-top: var(--ds-space-500); }
 .section-h { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--ds-space-200); flex-wrap: wrap; margin-bottom: var(--ds-space-200); }
@@ -5344,8 +5347,8 @@ function showLoader(title, steps, live, ms) {
   const id = ++loadSeq;
   let w = $("#loader");
   if (!w) { w = document.createElement("div"); w.id = "loader"; w.className = "loadwrap"; document.body.appendChild(w); }
-  w.innerHTML = `<div class="loadcard" role="alertdialog" aria-modal="true" aria-labelledby="ldT" aria-describedby="ldS">${LOAD_ART()}<h2 id="ldT">${esc(title)}</h2>
-    <p class="ld-step" id="ldS" aria-live="polite">${esc(steps[0])}…</p><div class="ld-bar" role="progressbar" aria-label="Loading"><i></i></div>${live ? `<p class="ld-note-t" id="ldN">Live Athena query. The first load of a run can take up to a minute; after that it is cached for an hour.</p>` : ""}</div>`;
+  w.innerHTML = `<div class="loadcard" role="alertdialog" aria-modal="true" aria-labelledby="ldT">${LOAD_ART()}<h2 id="ldT">Loading</h2>
+    <div class="ld-bar" role="progressbar" aria-label="Loading"><i></i></div></div>`;
   w.classList.remove("closing"); w.classList.add("show"); document.body.classList.add("loading");
   hideTip(); closeMenus();
   clearInterval(loadIv); clearTimeout(loadSlow);
