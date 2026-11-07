@@ -1,5 +1,6 @@
--- BQ1 indicator validation: drop-one-behaviour test (same logic as the
--- "Which indicators matter" tab on dashboard page 1).
+-- BQ1 indicator validation: drop-one-behaviour test. Run by hand in Athena
+-- (aml_curated). Same logic as the "Which indicators matter" tab of the old
+-- BQ1 page, archive/dashboard_pages/1_BQ1_Account_Risk.py.
 --
 -- For each of the 7 behaviours, re-rank every account each day WITHOUT that
 -- behaviour's points and count the laundering account-days still caught in the

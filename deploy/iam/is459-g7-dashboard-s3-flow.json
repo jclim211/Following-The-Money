@@ -1,0 +1,55 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::is459-g7-projectbucket/scripts/queries/*",
+                "arn:aws:s3:::is459-g7-projectbucket/scripts/dashboard/*",
+                "arn:aws:s3:::is459-g7-projectbucket/curated/bq2/*",
+                "arn:aws:s3:::is459-g7-projectbucket/clean/banks/*",
+                "arn:aws:s3:::is459-g7-projectbucket/raw/accounts/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:AbortMultipartUpload"
+            ],
+            "Resource": [
+                "arn:aws:s3:::is459-g7-projectbucket/athena-results/*",
+                "arn:aws:s3:::is459-g7-projectbucket/scripts/dashboard/from-instance/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation"
+            ],
+            "Resource": "arn:aws:s3:::is459-g7-projectbucket"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "glue:GetDatabase",
+                "glue:GetTable",
+                "glue:GetPartitions"
+            ],
+            "Resource": [
+                "arn:aws:glue:us-east-1:761018854594:catalog",
+                "arn:aws:glue:us-east-1:761018854594:database/aml_bq2_curated",
+                "arn:aws:glue:us-east-1:761018854594:database/aml_clean",
+                "arn:aws:glue:us-east-1:761018854594:database/aml_raw",
+                "arn:aws:glue:us-east-1:761018854594:table/aml_bq2_curated/*",
+                "arn:aws:glue:us-east-1:761018854594:table/aml_clean/*",
+                "arn:aws:glue:us-east-1:761018854594:table/aml_raw/*"
+            ]
+        }
+    ]
+}
