@@ -3711,6 +3711,55 @@ table.dt { width: 100%; border-collapse: collapse; font: var(--ds-font-body); }
 @media (max-width: 720px) { .modal.flowm .modal-h > .aws { --sz: 32px; } .modal.flowm .modal-h h2 { font: var(--ds-font-heading-small); } }
 @media (max-width: 560px) { .fpar-lanes { grid-template-columns: 1fr; } .stg { grid-template-columns: 100px minmax(0, 1fr) 72px; } .jl-axis, .jrow { grid-template-columns: 112px minmax(0, 1fr) 20px; } }
 @media (prefers-reduced-motion: reduce) { .now-tag i, .track i.is-running::after, .spin, .fd-live .pbar span, .fstep.is-running::before, .is-running > .fnode::after, .is-running > .fnode .aws { animation: none; } }
+/* icons only: the running ones wander a few pixels on a new random path each round */
+.bob { display: inline-grid; }
+.bob[style] { animation: ftm-bob var(--bd, 1.8s) var(--ds-easing-in-out, ease-in-out) var(--bdl, 0s) infinite; }
+@keyframes ftm-bob { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(var(--x1), var(--y1)); } 50% { transform: translate(var(--x2), var(--y2)); } 75% { transform: translate(var(--x3), var(--y3)); } }
+.nowis { display: flex; gap: var(--ds-space-200); padding: var(--ds-space-050) var(--ds-space-050) var(--ds-space-025); }
+.nowi { padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--ds-radius-large); }
+.nowi:hover .aws { box-shadow: 0 0 0 2px var(--ds-border-bold); }
+.nowi:focus-visible { outline: 2px solid var(--ds-border-focused); outline-offset: 2px; }
+.now .now-l > * { white-space: nowrap; }
+.now .now-l .lozenge { margin-inline-start: auto; }
+.now .now-l > span:nth-child(2) { margin-inline-start: auto; }
+.now .now-l > span:nth-child(2) + .lozenge { margin-inline-start: 0; }
+.fwrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--ds-space-300); }
+.pflow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; row-gap: var(--ds-space-200); padding: var(--ds-space-300) var(--ds-space-100); }
+.pnode { position: relative; padding: 6px; border: 0; border-radius: var(--ds-radius-xlarge); background: transparent; cursor: pointer; transition: background-color var(--ds-duration-short) var(--ds-easing-out-practical); }
+.pnode:hover { background: var(--ds-background-neutral-subtle-hovered); }
+.pnode:focus-visible { outline: 2px solid var(--ds-border-focused); outline-offset: 0; }
+.pnode[aria-pressed="true"] { background: var(--ds-background-selected); box-shadow: inset 0 0 0 2px var(--ds-border-selected); }
+.pnode .aws { transition: transform var(--ds-duration-short) var(--ds-easing-out-practical); }
+.pnode:hover .aws { transform: scale(1.06); }
+.pnode.is-pending .aws, .pnode.is-skipped .aws { --tile-bg: var(--ds-background-neutral); --tile-fg: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.pnode.is-running .aws { box-shadow: 0 0 0 2px var(--ds-border-discovery); }
+.pnode.is-failed .aws { box-shadow: 0 0 0 2px var(--ds-border-danger); }
+.pnode .pb { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--ds-surface-overlay, var(--ds-surface)); box-shadow: 0 0 0 2px var(--ds-surface-overlay, var(--ds-surface)); }
+.pnode .pb .ic { width: 16px; height: 16px; }
+.pnode .pb .spin { width: 14px; height: 14px; }
+.pnode.is-done .pb .ic { color: var(--ds-icon-success); }
+.pnode.is-failed .pb .ic { color: var(--ds-icon-danger); }
+.pnode.is-cancelled .pb .ic { color: var(--ds-icon-warning); }
+.pnode.is-pending .pb .ic, .pnode.is-skipped .pb .ic { color: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.pc { flex: none; display: block; width: 26px; height: 2px; border-radius: 1px; background: var(--ds-border); }
+.pc.is-done { background: var(--ds-border-success); }
+.pc.is-failed { background: var(--ds-border-danger); }
+.pc.is-pending, .pc.is-skipped, .pc.is-cancelled { background: repeating-linear-gradient(to right, var(--ds-border-bold) 0 3px, transparent 3px 6px); opacity: .7; }
+.pc.is-running { background: repeating-linear-gradient(to right, var(--ds-border-discovery) 0 5px, transparent 5px 10px); background-size: 10px 2px; animation: ftm-flow .55s linear infinite; }
+@keyframes ftm-flow { from { background-position: 0 0; } to { background-position: 10px 0; } }
+.ppar { display: grid; gap: var(--ds-space-150); padding: var(--ds-space-150); border: var(--ds-border-width) dashed var(--ds-border); border-radius: var(--ds-radius-xlarge); }
+.ppar.is-running { border-color: var(--ds-border-discovery); }
+.ppar.is-done { border-color: var(--ds-border-success); border-style: solid; }
+.ppar.is-failed { border-color: var(--ds-border-danger); }
+.plane { display: flex; align-items: center; }
+.pend { display: grid; place-items: center; width: 28px; height: 28px; }
+.pend .ic { width: 22px; height: 22px; }
+.pend.is-done .ic { color: var(--ds-icon-success); } .pend.is-failed .ic { color: var(--ds-icon-danger); } .pend.is-pending .ic { color: var(--ds-icon-subtlest, var(--ds-icon-subtle)); }
+.fdetail { position: static; animation: ftm-drop .26s var(--ds-easing-out-practical, ease-out); }
+.fd-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--ds-space-300); align-items: start; }
+.fd-l { display: grid; gap: var(--ds-space-200); }
+@media (max-width: 800px) { .fd-cols { grid-template-columns: minmax(0, 1fr); } .pc { width: 14px; } .aws.xl { --sz: 40px; } }
+@media (prefers-reduced-motion: reduce) { .bob[style], .pc.is-running { animation: none; } }
 </style>
 </head>
 <body>
@@ -4195,6 +4244,7 @@ function drawPipe() {
   const box = $("#pipeBox"); if (!box) return;
   const code = $("#pipeCode"); if (code) ST.pipeCode = code.value;
   box.innerHTML = pipeInner();
+  rebob(box);
   schedulePoll();
 }
 /* Auto-refresh the home page: every 15 s while a run is going, otherwise every minute.
@@ -4243,7 +4293,7 @@ const AWS = {
   emr: ["Amazon EMR Serverless", "purple", `<path d="m20 6.5 11.7 6.75v13.5L20 33.5 8.3 26.75v-13.5Z"/><path d="m14 20 3.5 3.5L26 15"/>`],
   athena: ["Amazon Athena", "purple", `<circle cx="18" cy="18" r="8.5"/><path d="m24.2 24.2 7.3 7.3"/><path d="M14 15.5h8M14 19.5h5.5"/>`],
 };
-const aws = (svc, cls = "") => { const [name, tone, g] = AWS[svc]; return `<span class="aws ${tone} ${cls}" role="img" aria-label="${name}" title="${name}"><svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${g}</svg></span>`; };
+const aws = (svc, cls = "", quiet) => { const [name, tone, g] = AWS[svc]; return `<span class="aws ${tone} ${cls}"${quiet ? ' aria-hidden="true"' : ` role="img" aria-label="${name}" title="${name}"`}><svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${g}</svg></span>`; };
 const svcShort = svc => AWS[svc][0].replace(/^(Amazon|AWS) /, "");
 const SAMPLE = `<span class="lozenge warning sample" title="Mock for the design review: these numbers are generated. Nothing here is read from AWS yet.">Sample data</span>`;
 
@@ -4309,35 +4359,41 @@ const fill = (t, f) => t.replace(/<run>/g, f.run).replace(/<db>/g, "aml_" + f.ru
 const stateIcon = s => s.state === "running" ? `<span class="spin" aria-hidden="true"></span>`
   : ic({ done: "check-circle", failed: "cross-circle", cancelled: "cross-circle", skipped: "minus" }[s.state] || "clock");
 
-/* Upload card: the step(s) running now, or where a failed run stopped */
+/* Upload card: only the icons of the step(s) running now (they bounce); a click opens that step in the pipeline */
+const bob = () => { const r = () => (Math.random() * 8 - 4).toFixed(1) + "px";
+  return `--x1:${r()};--y1:${r()};--x2:${r()};--y2:${r()};--x3:${r()};--y3:${r()};--bd:${(1.3 + Math.random() * 1.2).toFixed(2)}s;--bdl:-${(Math.random() * 2).toFixed(2)}s`; };
+function rebob(root) {  // a new random path every round, so the bouncing never repeats
+  root.querySelectorAll(".bob[style]").forEach(el => { if (el.dataset.bob) return; el.dataset.bob = 1;
+    el.addEventListener("animationiteration", () => { el.setAttribute("style", bob()); }); });
+}
 function nowBox(u) {
   const f = flowFor(u.run); if (!f) return "";
-  const S = flowStats(f), track = `<div class="track" aria-hidden="true">${FORDER.map(k => `<i class="is-${fstep(f, k).state}" title="${esc(FSTEPS[k].name)}"></i>`).join("")}</div>`;
+  const S = flowStats(f), track = `<div class="track" aria-hidden="true">${FORDER.map(k => `<i class="is-${fstep(f, k).state}"></i>`).join("")}</div>`;
+  const tile = (k, run) => `<button class="nowi" data-flow="${esc(u.run)}" data-node="${k}" aria-label="Open ${esc(FSTEPS[k].name)} in the pipeline"><span class="bob"${run ? ` style="${bob()}"` : ""}>${aws(FSTEPS[k].svc, "lg", true)}</span></button>`;
   if (u.status === "failed") {
     const k = S.failed[0]; if (!k) return "";
-    return `<div class="now fail"><div class="now-l"><span class="now-tag"><i></i>Failed at step ${FORDER.indexOf(k) + 1} of 12</span></div>
-      <div class="now-s">${aws(FSTEPS[k].svc, "sm")}<div class="t"><b>${esc(FSTEPS[k].name)}</b><span>${esc(svcShort(FSTEPS[k].svc))}</span></div></div>${track}</div>`;
+    return `<div class="now fail"><div class="now-l"><span class="now-tag"><i></i>Failed at step ${FORDER.indexOf(k) + 1} of 12</span>${SAMPLE}</div><div class="nowis">${tile(k, false)}</div>${track}</div>`;
   }
-  const rows = S.running.map(k => `<div class="now-s">${aws(FSTEPS[k].svc, "sm")}<div class="t"><b>${esc(FSTEPS[k].name)}</b><span>${esc(svcShort(FSTEPS[k].svc))}</span></div></div>`).join("");
-  return `<div class="now"><div class="now-l"><span class="now-tag"><i></i>Now running${S.running.length > 1 ? " in parallel" : ""}</span><span>${S.done} of 12 steps done</span></div>${rows}${track}</div>`;
+  return `<div class="now"><div class="now-l"><span class="now-tag"><i></i>Now running${S.running.length > 1 ? " in parallel" : ""}</span><span>${S.done} of 12 steps done</span>${SAMPLE}</div>
+    <div class="nowis">${S.running.map(k => tile(k, true)).join("")}</div>${track}</div>`;
 }
 
-/* The flow popup: just the pipeline. A step's details open only when it is clicked. */
-function fnode(f, k, picked) {
+/* The flow popup: just the pipeline as icons. A step's name and details appear only when it is clicked. */
+function pnode(f, k, picked) {
   const d = FSTEPS[k], s = fstep(f, k);
-  return `<button class="fnode" data-node="${k}" aria-pressed="${k === picked}" aria-label="${esc(d.name)}, ${FSTATE[s.state][1]}">${aws(d.svc)}<span class="fn-t"><b>${esc(d.name)}</b><small>${esc(svcShort(d.svc))}</small></span><span class="fn-s" title="${FSTATE[s.state][1]}">${stateIcon(s)}</span></button>`;
+  return `<button class="pnode is-${s.state}" data-node="${k}" aria-pressed="${k === picked}" aria-label="${esc(d.name)}, ${FSTATE[s.state][1]}"><span class="bob"${s.state === "running" ? ` style="${bob()}"` : ""}>${aws(d.svc, "xl", true)}</span><span class="pb">${stateIcon(s)}</span></button>`;
 }
+const pc = st => `<i class="pc is-${st}" aria-hidden="true"></i>`;
 function flowGraph(f, picked) {
-  const li = k => `<li class="fstep is-${fstep(f, k).state}">${fnode(f, k, picked)}</li>`;
-  const lane = (title, ks) => `<div class="flane"><div class="flane-h">${title}</div><ol>${ks.map(li).join("")}</ol></div>`;
-  const lanes = ["bq1profiles", "bq1scoring", "bq2schemes", "bq2analysis"].map(k => fstep(f, k).state);
+  const n = k => pnode(f, k, picked), st = k => fstep(f, k).state;
+  const lanes = ["bq1profiles", "bq1scoring", "bq2schemes", "bq2analysis"].map(st);
   const par = lanes.some(s => s === "failed") ? "failed" : lanes.some(s => s === "running") ? "running" : lanes.every(s => s === "done") ? "done" : "pending";
-  const end = f.status === "SUCCEEDED" ? ["done", "check-circle", "Finished"] : f.status === "FAILED" ? ["failed", "cross-circle", "Stopped with an error"] : ["pending", "clock", "Finish"];
-  return `<ol class="fgraph">${["upload", "start", "database", "clean"].map(li).join("")}
-    <li class="fstep fpar is-${par}"><div class="fpar-box"><div class="fpar-h">${aws("sfn", "xs")}<span>BQ1 and BQ2 run at the same time</span></div>
-      <div class="fpar-lanes">${lane("BQ1", ["bq1profiles", "bq1scoring"])}${lane("BQ2", ["bq2schemes", "bq2analysis"])}</div></div></li>
-    ${["crawler", "lookup", "view", "record"].map(li).join("")}
-    <li class="fstep fend is-${end[0]}">${ic(end[1])}<span>${end[2]}</span></li></ol>`;
+  const lane = (a, b) => `<div class="plane">${n(a)}${pc(st(b))}${n(b)}</div>`;
+  const end = f.status === "SUCCEEDED" ? ["done", "check-circle"] : f.status === "FAILED" ? ["failed", "cross-circle"] : ["pending", "clock"];
+  const seq = ks => ks.map((k, i) => (i ? pc(st(k)) : "") + n(k)).join("");
+  return `<div class="pflow" role="group" aria-label="Pipeline steps">${seq(["upload", "start", "database", "clean"])}${pc(par)}
+    <div class="ppar is-${par}">${lane("bq1profiles", "bq1scoring")}${lane("bq2schemes", "bq2analysis")}</div>
+    ${pc(st("crawler"))}${seq(["crawler", "lookup", "view", "record"])}${pc(end[0])}<span class="pend is-${end[0]}" aria-label="${f.status}">${ic(end[1])}</span></div>`;
 }
 function flowDetail(f, k) {
   const d = FSTEPS[k], s = fstep(f, k), [tone, label] = FSTATE[s.state], finished = !!RUN_BY[f.run];
@@ -4355,26 +4411,26 @@ function flowDetail(f, k) {
   }
   const act = d.spark && finished ? `<div class="fd-a"><button class="btn" data-go="${esc(f.run)}-spark" data-job-open="${k}">${ic("chart-bar")}Open in Spark jobs</button></div>` : "";
   return `<div class="fd-h">${aws(d.svc, "lg")}<div><div class="fd-svc">${esc(AWS[d.svc][0])} · step ${FORDER.indexOf(k) + 1} of 12</div><h3>${esc(d.name)}</h3></div><span class="lozenge ${tone}">${label}</span><button class="btn subtle icon-only" data-unpick aria-label="Close the details">${ic("cross")}</button></div>
-    <p class="fd-what">${esc(fill(d.what, f))}</p>
-    ${s.state === "running" ? `<div class="fd-live"><div class="pbar"><span></span></div><span>Step Functions is waiting for this step to finish.</span></div>` : ""}
-    ${s.error ? `<div class="errbox" role="alert">${ic(s.state === "cancelled" ? "warning" : "cross-circle")}<div><h3>${s.state === "cancelled" ? "Stopped" : "Error"}</h3><pre>${esc(s.error)}</pre></div></div>` : ""}
-    <table class="dt facts"><tbody>${rows.map(([a, b]) => `<tr><td class="muted">${a}</td><td>${b}</td></tr>`).join("")}</tbody></table>${act}`;
+    <div class="fd-cols"><div class="fd-l"><p class="fd-what">${esc(fill(d.what, f))}</p>
+      ${s.state === "running" ? `<div class="fd-live"><div class="pbar"><span></span></div><span>Step Functions is waiting for this step to finish.</span></div>` : ""}
+      ${s.error ? `<div class="errbox" role="alert">${ic(s.state === "cancelled" ? "warning" : "cross-circle")}<div><h3>${s.state === "cancelled" ? "Stopped" : "Error"}</h3><pre>${esc(s.error)}</pre></div></div>` : ""}${act}</div>
+    <table class="dt facts"><tbody>${rows.map(([a, b]) => `<tr><td class="muted">${a}</td><td>${b}</td></tr>`).join("")}</tbody></table></div>`;
 }
-function flowModal(run) {
+function flowModal(run, first) {
   const f = flowFor(run); if (!f) return;
   const [tone, label] = RSTATE[f.status] || ["neutral", f.status];
   let picked = null;
   const html = `<header class="modal-h">${aws("sfn", "lg")}<div class="mh-t"><h2>Pipeline for ${esc(run)}</h2>
       <p><span class="lozenge ${tone}">${label}</span><span>${esc(f.dataset)} dataset</span>${SAMPLE}</p></div>
     <div class="mh-a"><button class="btn subtle icon-only" data-close aria-label="Close">${ic("cross")}</button></div></header>
-  <div class="modal-b"><p class="fhint">${ic("information-circle")}Select a step to see what it did.</p>
-    <div class="fwrap" id="fWrap"><div>${flowGraph(f, null)}</div><aside id="fAside"></aside></div></div>`;
+  <div class="modal-b"><p class="fhint">${ic("information-circle")}Select an icon to see the step.</p>
+    <div class="fwrap" id="fWrap">${flowGraph(f, null)}<div id="fAside"></div></div></div>`;
   const modal = openModal("flow", html, `Pipeline for ${run}`);
   modal.classList.add("pick", "flowm"); modal.parentElement.classList.add("pick-wrap");
+  rebob(modal);
   const show = k => {
     picked = picked === k ? null : k;
     modal.querySelectorAll("[data-node]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.node === picked)));
-    $("#fWrap", modal).classList.toggle("open", !!picked);
     $("#fAside", modal).innerHTML = picked ? `<div class="fdetail" aria-live="polite">${flowDetail(f, picked)}</div>` : "";
   };
   modal.addEventListener("click", e => {
@@ -4383,8 +4439,9 @@ function flowModal(run) {
     const g = e.target.closest("[data-go]");
     if (g) { if (g.dataset.jobOpen) sparkJob = g.dataset.jobOpen; if (MODALS.length) closeModal(MODALS[0].dataset.key, true); }
   });
+  if (first && FSTEPS[first]) show(first);
 }
-document.addEventListener("click", e => { const b = e.target.closest("[data-flow]"); if (b) { e.preventDefault(); flowModal(b.dataset.flow); } });
+document.addEventListener("click", e => { const b = e.target.closest("[data-flow]"); if (b) { e.preventDefault(); flowModal(b.dataset.flow, b.dataset.node); } });
 
 /* ---------- Spark jobs page: <run>-spark. The jobs on one time axis; numbers only after a click. ---------- */
 let sparkJob = null;

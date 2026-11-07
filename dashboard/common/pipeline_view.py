@@ -12,6 +12,7 @@ spark = {"kind": "spark", "meta": {...}, "flow": flow, "jobs": [one dict per Spa
 """
 from __future__ import annotations
 
+import os
 import zlib
 from datetime import datetime, timedelta, timezone
 
@@ -64,6 +65,8 @@ def mock_flow(run: str, dataset: str, started: datetime, status: str, scale: flo
     off = _offsets(scale)
     now = now or datetime.now(timezone.utc)
     elapsed = (now - started).total_seconds() if status == "RUNNING" else float("inf")
+    if status == "RUNNING":  # keep the last step running until the execution really ends
+        elapsed = min(elapsed, off["record"][0] + 0.5)
     steps = {"upload": {"state": "done", "start": _iso(started - timedelta(minutes=4)), "end": _iso(started - timedelta(minutes=3))}}
     failed_end = None
     if fail_at:
@@ -125,8 +128,12 @@ def mock_flows(runs: list, uploads: list, now: datetime | None = None) -> dict:
     for u in uploads:
         ex, ds = u.get("execution"), u.get("dataset") or "HI-Small"
         if u["status"] == "running" and ex:
-            started = _running_start(u["run"], ds, now)
-            ex["started"] = _iso(started)
+            if os.getenv("DASHBOARD_MOCK_DIR"):
+                started = _running_start(u["run"], ds, now)
+            else:  # a real run: sample progress from its real start time
+                started = _parse(ex["started"])
+            if os.getenv("DASHBOARD_MOCK_DIR"):
+                ex["started"] = _iso(started)
             flows[u["run"]] = mock_flow(u["run"], ds, started, "RUNNING", now=now, execution=ex["execution"])
         elif u["status"] == "failed" and ex:
             flows[u["run"]] = mock_flow(u["run"], ds, _parse(ex["started"]), "FAILED", fail_at="bq2analysis",
