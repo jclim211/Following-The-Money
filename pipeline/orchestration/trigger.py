@@ -1,4 +1,7 @@
-"""Starts is459-g7-pipeline when a run has all its required files.
+"""NO LONGER USED: its EventBridge rule is disabled by infra/ and runs start from the
+dashboard (dashboard/common/pipeline.py). Kept for reference.
+
+Starts is459-g7-pipeline when a run has all its required files.
 
 EventBridge calls this for every new file under runs/<run>/raw/. The pipeline
 starts only once transactions, patterns and accounts all have a file. The
