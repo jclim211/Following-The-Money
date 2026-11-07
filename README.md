@@ -32,8 +32,9 @@ The `Is Laundering` label is used only to evaluate results, never as a scoring i
  Streamlit dashboard on EC2 is459-g7-dashboard   (dashboard/, deployed from GitHub main)
 ```
 
-All resources are in AWS account 761018854594, region us-east-1. Every resource is named
-`is459-g7-*`; the bucket is `is459-g7-projectbucket`.
+All resources are in AWS account 761018854594, region us-east-1 (shared with other teams). Our
+resources are named `is459-g7-*` (bucket `is459-g7-projectbucket`), plus the per-run Glue
+databases `aml_<run>` and crawlers `aml-run-<run>`; Athena uses the `primary` workgroup.
 
 ## Where to find what
 

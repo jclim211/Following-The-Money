@@ -53,7 +53,7 @@ Only touch resources named `is459-g7-*` or the bucket `is459-g7-projectbucket`.
 
 - BQ1 (`aml_curated`): `risk_rankings` (one row per account per day, score, rank, points per behaviour), `account_labels` (IsLaundering per account-day, evaluation only), `account_profiles` (raw behaviours), `capacity_evaluation`, `capacity_summary`.
 - BQ2 (`aml_bq2_curated`, data in `curated/bq2/`): `flow_comparison`, `holding_time`, `scheme_profile`, `country_pairs`, `bank_entry_exit`, `scheme_edges`, plus `aml_clean.banks` and `aml_raw.raw_accounts` for bank size.
-- The server can read `aml_curated`, `aml_bq2_curated`, `aml_clean`, `aml_raw`, `aml_metrics` and every run database `aml_hi_*`. A new database needs adding to the role's policy (copies in `deploy/iam/`, ask Jie Ching).
+- The server can read `aml_curated`, `aml_bq2_curated`, `aml_clean`, `aml_raw`, `aml_metrics` and run databases named `aml_hi_*` (see `deploy/README.md`). A new database needs adding to the role's policy (copies in `deploy/iam/`, ask Jie Ching).
 
 ## Do I need AWS access?
 

@@ -36,5 +36,6 @@ clean.py
 | BQ2 output | `curated/bq2/` (Glue DB `aml_bq2_curated`) | `runs/<run>/curated/bq2/` |
 | Job metrics (row counts, timings, checks) | `metrics/` (Glue DB `aml_metrics`) | `runs/<run>/metrics/` |
 
-Each run gets its own Glue database (named `aml_hi_*`), so runs never overwrite each other or
-the original tables.
+Each run gets its own Glue database, `aml_<run>` with hyphens turned into underscores (for
+example `hi-small-4` becomes `aml_hi_small_4`), so runs never overwrite each other or the
+original tables.
