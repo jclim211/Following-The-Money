@@ -3545,8 +3545,17 @@ table.dt { width: 100%; border-collapse: collapse; font: var(--ds-font-body); }
 .runs.has-pick .runcard[aria-checked="false"] { filter: blur(2px); opacity: .5; transform: scale(.94); }
 .runs.has-pick .runcard[aria-checked="false"]:hover, .runs.has-pick .runcard[aria-checked="false"]:focus-visible { filter: none; opacity: .9; }
 .runs.has-pick .runcard[aria-checked="true"] { transform: scale(1.02); }
-.modal.pick { width: min(880px, 100%); }
-.modal.pick .feature .panel { height: 160px; }
+.mwrap.pick-wrap { align-items: center; padding: var(--ds-space-400) var(--ds-space-300); }
+.mwrap.pick-wrap .blanket { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.modal.pick { width: min(1240px, 100%); max-height: calc(100vh - 48px); }
+.modal.pick .modal-h { padding: var(--ds-space-300) var(--ds-space-400) var(--ds-space-250); }
+.modal.pick .modal-h h2 { font: var(--ds-font-heading-large); }
+.modal.pick .modal-b { padding: var(--ds-space-300) var(--ds-space-400) var(--ds-space-400); }
+.modal.pick .grid.g2 { gap: var(--ds-space-300); }
+.modal.pick .feature .panel { height: 280px; }
+.modal.pick .feature .panel .art { width: 240px; }
+.modal.pick .feature .body { padding: var(--ds-space-300) var(--ds-space-400) var(--ds-space-400); }
+.modal.pick .feature h3 { font-size: 1.5rem; line-height: 1.25; }
 @media (prefers-reduced-motion: reduce) { .runs .runcard { transition: none; } .upcard .pbar span { animation: none; width: 100%; } }
 </style>
 </head>
@@ -3970,7 +3979,7 @@ function pickModal(run) {
       <span class="go">Open BQ2 for ${esc(run)} ${ic("arrow-right")}</span></div></button>
   </div></div>`;
   const modal = openModal("pick", html, `Open a dashboard for ${run}`);
-  modal.classList.add("pick");
+  modal.classList.add("pick"); modal.parentElement.classList.add("pick-wrap");
   modal.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => closeModal("pick", true)));
   ONCLOSE.pick = () => pickRun(null);
 }
