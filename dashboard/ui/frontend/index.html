@@ -3957,13 +3957,16 @@ function homePage() {
 
   <h2 class="h2xl"><span class="step">1</span>Choose a pipeline run</h2>
   <p class="lead">The most recent run comes first. Pick one to open its BQ1 or BQ2 dashboard. Each run is a separate copy of the data, so numbers can differ between runs.</p>
-  <div class="grid runs" id="runGrid" role="radiogroup" aria-label="Pipeline run">
-    ${runs.map(r => { const m = runMeta(r), latest = r.run === LATEST; return `<button class="runcard${latest ? " latest" : ""}" role="radio" aria-checked="${r.run === pickedRun}" data-run="${r.run}">
+  <div id="runsBox">${runsBox()}</div>
+  <p class="classic">${ic("link-external")}<span>Need the previous layout? <a href="/classic-bq1" target="_blank" rel="noopener">Classic BQ1</a> and <a href="/classic-bq2" target="_blank" rel="noopener">classic BQ2</a> open in a new tab, on the original HI-Medium tables.</span></p>`;
+}
+function runsBox() {
+  return `<div class="grid runs${pickedRun ? " has-pick" : ""}" id="runGrid" role="radiogroup" aria-label="Pipeline run">
+    ${DATA.runs.map(r => { const m = runMeta(r), latest = r.run === LATEST; return `<button class="runcard${latest ? " latest" : ""}" role="radio" aria-checked="${r.run === pickedRun}" data-run="${r.run}">
       <span class="check">${ic("check-mark")}</span>
       <span class="top">${spot("dataset", "sm")}<span class="rc-t"><h3>${esc(r.run)}</h3>${latest ? `<span class="lozenge success">Latest</span>` : ""}</span></span>
       <span class="meta"><span title="Finished ${m.when} UTC, took ${m.took}">${esc(r.dataset)} · ${m.took} · ${m.when.slice(5)} UTC</span></span></button>`; }).join("")}
-  </div>${runs.length ? "" : `<div class="locked">${ic("information-circle")}<span>${ST.runsError ? `Could not read the run list from S3: ${esc(ST.runsError)}` : "No pipeline runs have finished yet."} The original HI-Medium dashboards are in the menu.</span></div>`}
-  <p class="classic">${ic("link-external")}<span>Need the previous layout? <a href="/classic-bq1" target="_blank" rel="noopener">Classic BQ1</a> and <a href="/classic-bq2" target="_blank" rel="noopener">classic BQ2</a> open in a new tab, on the original HI-Medium tables.</span></p>`;
+  </div>${DATA.runs.length ? "" : `<div class="locked">${ic("information-circle")}<span>${ST.runsError ? `Could not read the run list from S3: ${esc(ST.runsError)}` : "No pipeline runs have finished yet."} The original HI-Medium dashboards are in the menu.</span></div>`}`;
 }
 function pickModal(run) {
   delete ONCLOSE.pick;  // a previous pick popup closing must not clear this pick
@@ -4031,9 +4034,18 @@ function drawPipe() {
   const box = $("#pipeBox"); if (!box) return;
   const code = $("#pipeCode"); if (code) ST.pipeCode = code.value;
   box.innerHTML = pipeInner();
+  schedulePoll();
+}
+/* Auto-refresh the home page: every 15 s while a run is going, otherwise every minute.
+   A finished run then leaves the upload cards and appears in step 1 without a reload. */
+function schedulePoll() {
   clearTimeout(ST.pipeTimer);
-  if ((ST.pipe && ST.pipe.uploads || []).some(u => u.status === "running" || u.status === "succeeded"))
-    ST.pipeTimer = setTimeout(() => { if (currentPath === "home") ST.send({ path: "home", n: ++ST.n, action: "refresh" }); }, 30000);
+  const busy = (ST.pipe && ST.pipe.uploads || []).some(u => u.status === "running" || u.status === "succeeded");
+  ST.pipeTimer = setTimeout(() => {
+    if (currentPath !== "home") return;
+    if (document.visibilityState === "hidden" || MODALS.length) return schedulePoll();
+    ST.send({ path: "home", n: ++ST.n, action: "poll" });
+  }, busy ? 15000 : 60000);
 }
 document.addEventListener("click", e => {
   const s = e.target.closest("[data-start]");
@@ -4052,9 +4064,12 @@ function pickRun(run) {
   const grid = $("#runGrid"); if (grid) grid.classList.toggle("has-pick", !!run);
   if (run) pickModal(run);
 }
+function wireRuns() {
+  document.querySelectorAll("#runGrid [data-run]").forEach(c => c.addEventListener("click", () => pickRun(c.dataset.run)));
+}
 function wireHome() {
   drawPipe();
-  document.querySelectorAll("[data-run]").forEach(c => c.addEventListener("click", () => pickRun(c.dataset.run)));
+  wireRuns();
   const b = $("[data-pick]"); if (b) b.addEventListener("click", () => pickRun(b.dataset.pick));
 }
 
@@ -5484,7 +5499,12 @@ const ST = {
 function onRender(a) {
   buildPages(a.runs || []); ST.runsError = a.runs_error || "";
   if (a.pipeline) ST.pipe = a.pipeline;
-  if (ST.shown === "home" && !a.pending) drawPipe();   // the upload list refreshes without redrawing home
+  const runsSig = (a.runs || []).map(r => r.run).join(","), runsChanged = ST.runsSig !== undefined && runsSig !== ST.runsSig;
+  ST.runsSig = runsSig;
+  if (ST.shown === "home" && !a.pending) {   // the upload list and run list refresh without redrawing home
+    drawPipe();
+    const box = $("#runsBox"); if (runsChanged && box) { box.innerHTML = runsBox(); wireRuns(); }
+  }
   const path = BY_PATH[a.path] ? a.path : "home", p = BY_PATH[path];
   const key = `${path}|${a.n || 0}|${a.pending ? "pending" : "data"}`;
   if (key === ST.applied) return;               // the same render again (Streamlit reran for another reason)
