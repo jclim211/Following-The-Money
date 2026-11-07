@@ -8,7 +8,7 @@ the CSV exports in dashboard/data_bq1/ (set BQ1_DATA_SOURCE=csv to force that). 
   3. methodology, limitations and data checks.
 
 BQ1 Account Profiles page of the shared dashboard (was 3_BQ1_Pilot_Queue.py) (dashboard/Home.py). Data: dashboard/data_bq1/.
-Merged from BQ1_Streamlit_Dashboard_Merged_v2 (v2.1, see BQ1_PILOT_CHANGELOG.md).
+Merged from BQ1_Streamlit_Dashboard_Merged_v2 (v2.1, see archive/bq1_pilot/BQ1_PILOT_CHANGELOG.md).
 """
 from __future__ import annotations
 

@@ -1,0 +1,8 @@
+# Keep Linux line endings for files that run on the EC2 server or in AWS
+*.sh   text eol=lf
+*.py   text eol=lf
+*.sql  text eol=lf
+*.json text eol=lf
+*.service text eol=lf
+*.timer   text eol=lf
+*.bat  text eol=crlf
